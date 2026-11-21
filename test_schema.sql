@@ -15,16 +15,17 @@ INSERT INTO entradas_inventario (id_periodo, fecha_recepcion, cantidad_bolsas, i
 INSERT INTO galpones_externos (nombre_galpon, estado_region) VALUES ('Galpon de prueba','Zulia');
 
 -- Despacho interno: 40 bolsas (37 Tango + 3 Familiar) = 36000 Bs
+SET @u = (SELECT id_unidad FROM unidades_militares WHERE nombre_unidad LIKE '3001 %' LIMIT 1);
+SET @ur = (SELECT id_unidad FROM unidades_militares WHERE nombre_unidad LIKE '3101 %' LIMIT 1);
 INSERT INTO despachos (id_periodo,tipo_salida,fecha_despacho,id_batallon_beneficiario,id_batallon_retira,cantidad_familiar,cantidad_tango,total_bolsas,modalidad_oficio,estado_entrega,precio_unitario_aplicado,monto_base_bs,monto_neto_exigible_bs,id_usuario_registra)
-VALUES (1,'INTERNO_BATALLON','2026-12-02',(SELECT id_unidad FROM unidades_militares WHERE nombre_unidad LIKE '3001 %'),
-        (SELECT id_unidad FROM unidades_militares WHERE nombre_unidad LIKE '3101 %'),3,37,40,'CON_OFICIO','DESPACHADO',900,36000,36000,1);
+VALUES (1,'INTERNO_BATALLON','2026-12-02',@u,@ur,3,37,40,'CON_OFICIO','DESPACHADO',900,36000,36000,1);
 SET @d = LAST_INSERT_ID();
 -- Pago incompleto, luego complemento redondeado hacia arriba
 INSERT INTO pagos_batallon (id_despacho,id_periodo,id_batallon_pagador,concepto_plan,monto_pagado_bs,referencia_bancaria,fecha_pago,id_usuario_registra)
-VALUES (@d,1,(SELECT id_batallon_beneficiario FROM despachos WHERE id_despacho=@d),'PLAN_TANGO',30000,'1234','2026-12-02',1);
+VALUES (@d,1,@u,'PLAN_TANGO',30000,'1234','2026-12-02',1);
 SELECT '5) Tras pago de 30000 (esperado PARCIAL, diferencia -6000)' AS prueba, estado_financiero, diferencia_saldo_bs FROM despachos WHERE id_despacho=@d;
 INSERT INTO pagos_batallon (id_despacho,id_periodo,id_batallon_pagador,concepto_plan,monto_pagado_bs,referencia_bancaria,fecha_pago,id_usuario_registra)
-VALUES (@d,1,(SELECT id_batallon_beneficiario FROM despachos WHERE id_despacho=@d),'ABONO_COMPLEMENTARIO',6020,'5678','2026-12-03',1);
+VALUES (@d,1,@u,'ABONO_COMPLEMENTARIO',6020,'5678','2026-12-03',1);
 SELECT '6) Tras 2do pago de 6020 (esperado SALDO_A_FAVOR, diferencia 20, pagado 36020)' AS prueba, estado_financiero, diferencia_saldo_bs, monto_total_pagado_bs FROM despachos WHERE id_despacho=@d;
 
 -- Despacho externo y colaboración
