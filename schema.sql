@@ -40,7 +40,7 @@ DELIMITER ;
 
 -- Único usuario semilla. La clave inicial se define al primer inicio de la aplicación.
 INSERT INTO usuarios (usuario, nombre_completo, rol, password_hash, debe_cambiar_clave)
-VALUES ('master', 'Usuario Master', 'MASTER', 'PENDIENTE_PRIMER_INICIO', 1);
+VALUES ('master', 'Usuario Master', 'MASTER', 'pbkdf2_sha256$200000$/iUO6/69WuZBNPySEXpj+g==$nd12udF9QEn8wI5HE1bMyVPvXL9WKLpt5rnk55tnPLQ=', 1);   -- clave inicial Alfa26 (PBKDF2-SHA256); se pide cambiarla al primer inicio
 
 -- ---------------------------------------------------------------------------
 -- 2. PERÍODOS (cierre manual). Un solo período ABIERTO a la vez.
@@ -70,7 +70,7 @@ CREATE TABLE periodos_cierre (
 ) ENGINE=InnoDB;
 
 INSERT INTO periodos_cierre (nombre_periodo, fecha_inicio, precio_unitario_bolsa, stock_inicial_bolsas)
-VALUES ('Período 1', '2026-09-01', 857.48, 0);   -- AJUSTAR fecha, precio y stock inicial real
+VALUES ('Período 1', '2026-12-01', 0.00, 0);   -- Inicio 1/dic/2026. El MASTER fija precio y stock inicial desde la aplicación
 
 -- ---------------------------------------------------------------------------
 -- 3. HISTORIAL DE ACCESOS y AUDITORÍA (filtrables por período)
