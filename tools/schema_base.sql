@@ -2,8 +2,7 @@
 -- ALMACÉN DE ALIMENTOS CLAP - EJÉRCITO BOLIVARIANO (Fuerte Tiuna, Caracas)
 -- schema.sql  |  MySQL 5.7+ / 8.x / MariaDB 10.3+  |  100% LOCAL, SIN INTERNET
 -- Sin número de guía ni facturación fiscal: cada movimiento recibe un código
--- correlativo interno = prefijo + id autonumérico (ENT-000001, DES-000001, COL-000001),
--- que la aplicación/vistas construyen con CONCAT(prefijo, LPAD(id,6,'0')).
+-- correlativo interno = prefijo + id autonumérico (ENT-000001, DES-000001, COL-000001).
 -- Ejecutar:  mysql -u root -p --default-character-set=utf8mb4 < schema.sql
 -- (ARCHIVO GENERADO por tools/generar_sql.py a partir de tools/schema_base.sql)
 -- ============================================================================
@@ -19,7 +18,7 @@ CREATE TABLE usuarios (
   usuario           VARCHAR(30)  NOT NULL UNIQUE,
   nombre_completo   VARCHAR(100) NOT NULL,
   rol               ENUM('MASTER','OPERADOR') NOT NULL,
-  password_hash     VARCHAR(255) NOT NULL,           -- la aplicación guarda hash (bcrypt/PBKDF2), nunca texto plano
+  password_hash     VARCHAR(255) NOT NULL,
   debe_cambiar_clave TINYINT(1)  NOT NULL DEFAULT 1,
   activo            TINYINT(1)   NOT NULL DEFAULT 1,
   fecha_creacion    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -30,7 +29,7 @@ DELIMITER $$
 CREATE TRIGGER trg_usuarios_max4 BEFORE INSERT ON usuarios FOR EACH ROW
 BEGIN
   IF (SELECT COUNT(*) FROM usuarios) >= 4 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Límite de 4 usuarios alcanzado';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Límite de usuarios alcanzado';
   END IF;
   IF NEW.rol = 'MASTER' AND (SELECT COUNT(*) FROM usuarios WHERE rol='MASTER') >= 1 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Solo puede existir un usuario MASTER';
@@ -38,22 +37,35 @@ BEGIN
 END$$
 DELIMITER ;
 
--- Único usuario semilla. La clave inicial se define al primer inicio de la aplicación.
+-- Único usuario semilla. Clave inicial Alfa26 (PBKDF2-SHA256).
 INSERT INTO usuarios (usuario, nombre_completo, rol, password_hash, debe_cambiar_clave)
-VALUES ('master', 'Usuario Master', 'MASTER', 'pbkdf2_sha256$200000$/iUO6/69WuZBNPySEXpj+g==$nd12udF9QEn8wI5HE1bMyVPvXL9WKLpt5rnk55tnPLQ=', 1);   -- clave inicial Alfa26 (PBKDF2-SHA256); se pide cambiarla al primer inicio
+VALUES ('master', 'Usuario Master', 'MASTER', 'pbkdf2_sha256$200000$/iUO6/69WuZBNPySEXpj+g==$nd12udF9QEn8wI5HE1bMyVPvXL9WKLpt5rnk55tnPLQ=', 1);
 
 -- ---------------------------------------------------------------------------
--- 2. PERÍODOS (cierre manual). Un solo período ABIERTO a la vez.
+-- 2. CONFIGURACIÓN GENERAL DEL SISTEMA (ej. última ruta de respaldo)
+-- ---------------------------------------------------------------------------
+CREATE TABLE configuracion_sistema (
+  clave          VARCHAR(60) PRIMARY KEY,
+  valor          TEXT NULL,
+  actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------------------
+-- 3. PERÍODOS (cierre manual). Un solo período ABIERTO a la vez.
+--    Etiqueta estándar: #[numero_en_anio] - [nombre_periodo] - [dd/mm/yyyy]
 -- ---------------------------------------------------------------------------
 CREATE TABLE periodos_cierre (
   id_periodo           INT AUTO_INCREMENT PRIMARY KEY,
+  numero_en_anio       INT NOT NULL DEFAULT 1,
+  anio_calendario      INT NOT NULL DEFAULT 2026,
+  mes_numero           INT NOT NULL DEFAULT 12,
   nombre_periodo       VARCHAR(60) NOT NULL,
   fecha_inicio         DATE NOT NULL,
   fecha_cierre         DATETIME NULL,
   estado               ENUM('ABIERTO','CERRADO') NOT NULL DEFAULT 'ABIERTO',
-  precio_unitario_bolsa DECIMAL(12,2) NOT NULL,        -- vigente en el período (igual para Familiar y Tango)
-  stock_inicial_bolsas INT NOT NULL DEFAULT 0,         -- arrastre del cierre anterior
-  stock_final_bolsas   INT NULL,                       -- se congela al cerrar
+  precio_unitario_bolsa DECIMAL(12,2) NOT NULL,
+  stock_inicial_bolsas INT NOT NULL DEFAULT 0,
+  stock_final_bolsas   INT NULL,
   total_entradas       INT NULL,
   total_desp_internos  INT NULL,
   total_desp_externos  INT NULL,
@@ -69,11 +81,11 @@ CREATE TABLE periodos_cierre (
   FOREIGN KEY (reabierto_por) REFERENCES usuarios(id_usuario)
 ) ENGINE=InnoDB;
 
-INSERT INTO periodos_cierre (nombre_periodo, fecha_inicio, precio_unitario_bolsa, stock_inicial_bolsas)
-VALUES ('Período 1', '2026-12-01', 0.00, 0);   -- Inicio 1/dic/2026. El MASTER fija precio y stock inicial desde la aplicación
+INSERT INTO periodos_cierre (numero_en_anio, anio_calendario, mes_numero, nombre_periodo, fecha_inicio, precio_unitario_bolsa, stock_inicial_bolsas)
+VALUES (1, 2026, 12, 'Diciembre', '2026-12-01', 0.00, 0);
 
 -- ---------------------------------------------------------------------------
--- 3. HISTORIAL DE ACCESOS y AUDITORÍA (filtrables por período)
+-- 4. HISTORIAL DE ACCESOS y AUDITORÍA (filtrables por período)
 -- ---------------------------------------------------------------------------
 CREATE TABLE historial_accesos (
   id_acceso   BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -82,7 +94,6 @@ CREATE TABLE historial_accesos (
   id_periodo  INT NOT NULL,
   evento      ENUM('LOGIN_OK','LOGIN_FALLIDO','LOGOUT') NOT NULL,
   fecha_hora  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  equipo      VARCHAR(100) NULL,
   FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario),
   FOREIGN KEY (id_periodo) REFERENCES periodos_cierre(id_periodo),
   INDEX idx_acc_periodo (id_periodo, fecha_hora)
@@ -96,7 +107,7 @@ CREATE TABLE auditoria (
   tabla_afectada VARCHAR(50) NOT NULL,
   id_registro  BIGINT NOT NULL,
   accion       ENUM('CREAR','EDITAR','ANULAR','REABRIR','CIERRE','AJUSTE','CONFIG') NOT NULL,
-  motivo       VARCHAR(255) NULL,          -- obligatorio en EDITAR/ANULAR/AJUSTE (lo exige la aplicación)
+  motivo       VARCHAR(255) NULL,
   datos_anteriores JSON NULL,
   datos_nuevos     JSON NULL,
   FOREIGN KEY (id_periodo) REFERENCES periodos_cierre(id_periodo),
@@ -106,18 +117,20 @@ CREATE TABLE auditoria (
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------------
--- 4. CATÁLOGOS EDITABLES POR MASTER
+-- 5. CATÁLOGOS EDITABLES POR MASTER (Código corto separado del Nombre)
 -- ---------------------------------------------------------------------------
 CREATE TABLE unidades_militares (
   id_unidad   INT AUTO_INCREMENT PRIMARY KEY,
-  nombre_unidad VARCHAR(150) NOT NULL UNIQUE,
   codigo_unidad VARCHAR(10) NULL,
-  id_unidad_padre INT NULL,                 -- ej. 3501 -> 35 POLICIA MILITAR
+  nombre_unidad VARCHAR(150) NOT NULL,
+  id_unidad_padre INT NULL,
   es_agrupador TINYINT(1) NOT NULL DEFAULT 0,
   codigos_agrupados_texto VARCHAR(255) NULL,
-  saldo_acumulado_bs DECIMAL(14,2) NOT NULL DEFAULT 0,  -- >0 saldo a favor, <0 deuda (arrastra entre períodos)
+  saldo_cierre_no_aplicado_bs DECIMAL(14,2) NOT NULL DEFAULT 0,
+  saldo_acumulado_bs DECIMAL(14,2) NOT NULL DEFAULT 0,
   activo      TINYINT(1) NOT NULL DEFAULT 1,
   FOREIGN KEY (id_unidad_padre) REFERENCES unidades_militares(id_unidad),
+  UNIQUE KEY uq_unidad_codigo_nombre (codigo_unidad, nombre_unidad),
   INDEX idx_unidad_codigo (codigo_unidad)
 ) ENGINE=InnoDB;
 
@@ -126,10 +139,10 @@ CREATE TABLE galpones_externos (
   nombre_galpon VARCHAR(120) NOT NULL UNIQUE,
   estado_region VARCHAR(60) NULL,
   activo      TINYINT(1) NOT NULL DEFAULT 1
-) ENGINE=InnoDB;   -- vacío: el MASTER lo llena desde la interfaz
+) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------------
--- 5. MOVIMIENTOS DE INVENTARIO
+-- 6. MOVIMIENTOS DE INVENTARIO
 -- ---------------------------------------------------------------------------
 CREATE TABLE entradas_inventario (
   id_entrada INT AUTO_INCREMENT PRIMARY KEY,
@@ -148,10 +161,10 @@ CREATE TABLE entradas_inventario (
 CREATE TABLE colaboraciones_descarga (
   id_colaboracion INT AUTO_INCREMENT PRIMARY KEY,
   id_periodo INT NOT NULL,
-  id_entrada INT NULL,                       -- camión/lote descargado (opcional)
+  id_entrada INT NULL,
   fecha DATE NOT NULL,
   cantidad_bolsas INT NOT NULL CHECK (cantidad_bolsas > 0),
-  receptor VARCHAR(120) NULL,
+  receptor VARCHAR(120) NOT NULL DEFAULT 'Ayudante de descarga',
   observaciones VARCHAR(255) NULL,
   id_usuario_registra INT NOT NULL,
   fecha_registro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -167,33 +180,29 @@ CREATE TABLE despachos (
   id_periodo INT NOT NULL,
   tipo_salida ENUM('INTERNO_BATALLON','EXTERNO_GALPON') NOT NULL,
   fecha_despacho DATE NOT NULL,
-  -- Desglose de plan (mismo precio y mismo lote; solo distinción interna)
   cantidad_familiar INT NOT NULL DEFAULT 0,
   cantidad_tango    INT NOT NULL DEFAULT 0,
   total_bolsas      INT NOT NULL,
-  -- INTERNO
-  id_batallon_beneficiario INT NULL,         -- a quien se cobra
-  id_batallon_retira       INT NULL,         -- quien retira físicamente
+  id_batallon_beneficiario INT NULL,
+  id_batallon_retira       INT NULL,
   nombre_autorizado_retiro VARCHAR(100) NULL,
   cedula_autorizado_retiro VARCHAR(15) NULL,
   modalidad_oficio ENUM('CON_OFICIO','SIN_OFICIO') NULL,
   tiene_recibo     TINYINT(1) NULL,
-  -- EXTERNO
   id_galpon_destino INT NULL,
   nombre_conductor  VARCHAR(100) NULL,
   cedula_conductor  VARCHAR(15) NULL,
   vehiculo_descripcion VARCHAR(100) NULL,
   placa_vehiculo    VARCHAR(15) NULL,
-  -- Estado físico (solo DESPACHADO descuenta stock)
   estado_entrega ENUM('PENDIENTE_RETIRO','DESPACHADO') NOT NULL DEFAULT 'DESPACHADO',
-  -- Finanzas (solo INTERNO)
   precio_unitario_aplicado DECIMAL(12,2) NULL,
-  monto_base_bs            DECIMAL(14,2) NULL,     -- total_bolsas * precio
-  saldo_anterior_aplicado_bs DECIMAL(14,2) NOT NULL DEFAULT 0, -- >0 favor / <0 deuda arrastrada
+  monto_base_bs            DECIMAL(14,2) NULL,
+  saldo_anterior_aplicado_bs DECIMAL(14,2) NOT NULL DEFAULT 0,
   ajuste_manual_master_bs  DECIMAL(14,2) NOT NULL DEFAULT 0,
-  monto_neto_exigible_bs   DECIMAL(14,2) NULL,     -- base - saldo_anterior + ajuste
+  monto_neto_exigible_bs   DECIMAL(14,2) NULL,
   monto_total_pagado_bs    DECIMAL(14,2) NOT NULL DEFAULT 0,
-  diferencia_saldo_bs      DECIMAL(14,2) NOT NULL DEFAULT 0, -- pagado - neto (>0 favor, <0 deuda)
+  diferencia_saldo_bs      DECIMAL(14,2) NOT NULL DEFAULT 0,
+  saldo_arrastrado         TINYINT(1) NOT NULL DEFAULT 0,
   estado_financiero ENUM('NO_APLICA','PENDIENTE','PARCIAL','PAGADO','SALDO_A_FAVOR') NOT NULL DEFAULT 'NO_APLICA',
   observaciones VARCHAR(255) NULL,
   id_usuario_registra INT NOT NULL,
@@ -213,7 +222,6 @@ CREATE TABLE despachos (
   INDEX idx_desp_benef (id_batallon_beneficiario)
 ) ENGINE=InnoDB;
 
--- Pagos múltiples/abonos por despacho (Familiar, Tango, unificado o complemento)
 CREATE TABLE pagos_batallon (
   id_pago INT AUTO_INCREMENT PRIMARY KEY,
   id_despacho INT NOT NULL,
@@ -241,7 +249,7 @@ CREATE TABLE historial_saldos_batallon (
   id_unidad INT NOT NULL,
   id_periodo INT NOT NULL,
   tipo ENUM('ARRASTRE_CIERRE','AJUSTE_MASTER','APLICACION') NOT NULL,
-  monto_bs DECIMAL(14,2) NOT NULL,          -- >0 favor, <0 deuda
+  monto_bs DECIMAL(14,2) NOT NULL,
   saldo_resultante_bs DECIMAL(14,2) NOT NULL,
   motivo VARCHAR(255) NULL,
   id_usuario INT NOT NULL,
@@ -255,7 +263,7 @@ CREATE TABLE respaldos_pendrive (
   id_respaldo INT AUTO_INCREMENT PRIMARY KEY,
   id_periodo INT NOT NULL,
   tipo ENUM('CIERRE','RAPIDO') NOT NULL,
-  ruta_destino VARCHAR(255) NOT NULL,       -- Año\Período_Cierre
+  ruta_destino VARCHAR(255) NOT NULL,
   archivos TEXT NULL,
   id_usuario INT NOT NULL,
   fecha_hora DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -264,16 +272,20 @@ CREATE TABLE respaldos_pendrive (
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------------
--- 6. RECÁLCULO AUTOMÁTICO DE PAGOS Y PROTECCIÓN CONTRA BORRADO
+-- 7. RECÁLCULO AUTOMÁTICO DE PAGOS Y PROTECCIÓN CONTRA BORRADO
 -- ---------------------------------------------------------------------------
 DELIMITER $$
 CREATE PROCEDURE sp_recalcular_despacho(IN p_id INT)
 BEGIN
+  DECLARE v_uid INT;
+  DECLARE v_per INT;
+
   UPDATE despachos d
   SET d.monto_total_pagado_bs = IFNULL((SELECT SUM(p.monto_pagado_bs) FROM pagos_batallon p
                                         WHERE p.id_despacho = d.id_despacho AND p.anulado = 0), 0),
       d.monto_neto_exigible_bs = d.monto_base_bs - d.saldo_anterior_aplicado_bs + d.ajuste_manual_master_bs
   WHERE d.id_despacho = p_id AND d.tipo_salida = 'INTERNO_BATALLON';
+
   UPDATE despachos d
   SET d.diferencia_saldo_bs = d.monto_total_pagado_bs - d.monto_neto_exigible_bs,
       d.estado_financiero = CASE
@@ -282,6 +294,23 @@ BEGIN
         WHEN d.monto_total_pagado_bs - d.monto_neto_exigible_bs >  0.005 THEN 'SALDO_A_FAVOR'
         ELSE 'PAGADO' END
   WHERE d.id_despacho = p_id AND d.tipo_salida = 'INTERNO_BATALLON';
+
+  SELECT id_batallon_beneficiario, id_periodo INTO v_uid, v_per
+  FROM despachos WHERE id_despacho = p_id;
+
+  IF v_uid IS NOT NULL THEN
+    UPDATE unidades_militares u
+    SET u.saldo_acumulado_bs = u.saldo_cierre_no_aplicado_bs + IFNULL((
+      SELECT SUM(d.diferencia_saldo_bs)
+      FROM despachos d
+      WHERE d.id_batallon_beneficiario = v_uid
+        AND d.id_periodo = (SELECT id_periodo FROM periodos_cierre WHERE estado = 'ABIERTO' ORDER BY id_periodo DESC LIMIT 1)
+        AND d.tipo_salida = 'INTERNO_BATALLON'
+        AND d.anulado = 0
+        AND d.saldo_arrastrado = 0
+    ), 0)
+    WHERE u.id_unidad = v_uid;
+  END IF;
 END$$
 
 CREATE TRIGGER trg_pagos_ai AFTER INSERT ON pagos_batallon FOR EACH ROW
@@ -300,9 +329,8 @@ BEGIN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Prohibido eliminar: use anulac
 DELIMITER ;
 
 -- ---------------------------------------------------------------------------
--- 7. VISTAS (base de la UI y de los reportes de cierre)
+-- 8. VISTAS (base de la UI y de los reportes de cierre)
 -- ---------------------------------------------------------------------------
--- Stock = Saldo cierre anterior + Entradas - Despachos (DESPACHADO) - Colaboraciones
 CREATE VIEW v_inventario_periodo AS
 SELECT p.id_periodo, p.nombre_periodo, p.estado,
   p.stock_inicial_bolsas AS stock_inicial_arrastre,
@@ -322,10 +350,11 @@ FROM v_inventario_periodo v;
 
 CREATE VIEW v_conciliacion_batallones AS
 SELECT d.id_periodo, CONCAT('DES-', LPAD(d.id_despacho, 6, '0')) AS codigo_movimiento, d.fecha_despacho,
-  ub.nombre_unidad AS batallon_beneficiario, ur.nombre_unidad AS batallon_que_retiro,
+  CONCAT(IFNULL(CONCAT(ub.codigo_unidad, ' '), ''), ub.nombre_unidad) AS batallon_beneficiario,
+  CONCAT(IFNULL(CONCAT(ur.codigo_unidad, ' '), ''), ur.nombre_unidad) AS batallon_que_retiro,
   d.cantidad_familiar, d.cantidad_tango, d.total_bolsas, d.modalidad_oficio, d.estado_entrega,
   d.monto_base_bs, d.saldo_anterior_aplicado_bs, d.ajuste_manual_master_bs, d.monto_neto_exigible_bs,
-  d.monto_total_pagado_bs, d.diferencia_saldo_bs, d.estado_financiero,
+  d.monto_total_pagado_bs, d.diferencia_saldo_bs, d.saldo_arrastrado, d.estado_financiero,
   (SELECT GROUP_CONCAT(CONCAT(IFNULL(p.referencia_bancaria,'s/ref'),' (',p.monto_pagado_bs,')') SEPARATOR ' | ')
      FROM pagos_batallon p WHERE p.id_despacho=d.id_despacho AND p.anulado=0) AS pagos_detalle,
   d.observaciones
@@ -334,14 +363,16 @@ JOIN unidades_militares ub ON ub.id_unidad = d.id_batallon_beneficiario
 LEFT JOIN unidades_militares ur ON ur.id_unidad = d.id_batallon_retira
 WHERE d.tipo_salida='INTERNO_BATALLON' AND d.anulado=0;
 
--- Rendición de cuentas / pago al proveedor
 CREATE VIEW v_rendicion_cuentas AS
 SELECT s.id_periodo, s.nombre_periodo, s.stock_inicial_arrastre, s.entradas_periodo,
   s.desp_internos_total, s.desp_externos_total, s.colaboraciones_descarga, s.stock_disponible AS stock_en_almacen,
-  IFNULL((SELECT SUM(monto_neto_exigible_bs) FROM despachos d WHERE d.id_periodo=s.id_periodo AND d.tipo_salida='INTERNO_BATALLON' AND d.anulado=0),0) AS monto_esperado_bs,
-  IFNULL((SELECT SUM(monto_total_pagado_bs)  FROM despachos d WHERE d.id_periodo=s.id_periodo AND d.tipo_salida='INTERNO_BATALLON' AND d.anulado=0),0) AS monto_cobrado_bs,
-  IFNULL((SELECT SUM(-diferencia_saldo_bs) FROM despachos d WHERE d.id_periodo=s.id_periodo AND d.tipo_salida='INTERNO_BATALLON' AND d.anulado=0 AND diferencia_saldo_bs<0),0) AS total_deudas_bs,
-  IFNULL((SELECT SUM(diferencia_saldo_bs)  FROM despachos d WHERE d.id_periodo=s.id_periodo AND d.tipo_salida='INTERNO_BATALLON' AND d.anulado=0 AND diferencia_saldo_bs>0),0) AS total_saldos_favor_bs
+  (IFNULL((SELECT SUM(monto_total_pagado_bs) FROM despachos d WHERE d.id_periodo=s.id_periodo AND d.tipo_salida='INTERNO_BATALLON' AND d.anulado=0),0)
+   + IFNULL((SELECT SUM(-diferencia_saldo_bs) FROM despachos d WHERE d.id_periodo=s.id_periodo AND d.tipo_salida='INTERNO_BATALLON' AND d.anulado=0 AND d.saldo_arrastrado=0 AND d.diferencia_saldo_bs<0),0)
+   - IFNULL((SELECT SUM(diferencia_saldo_bs) FROM despachos d WHERE d.id_periodo=s.id_periodo AND d.tipo_salida='INTERNO_BATALLON' AND d.anulado=0 AND d.saldo_arrastrado=0 AND d.diferencia_saldo_bs>0),0)
+  ) AS monto_esperado_bs,
+  IFNULL((SELECT SUM(monto_total_pagado_bs) FROM despachos d WHERE d.id_periodo=s.id_periodo AND d.tipo_salida='INTERNO_BATALLON' AND d.anulado=0),0) AS monto_cobrado_bs,
+  IFNULL((SELECT SUM(-diferencia_saldo_bs) FROM despachos d WHERE d.id_periodo=s.id_periodo AND d.tipo_salida='INTERNO_BATALLON' AND d.anulado=0 AND d.saldo_arrastrado=0 AND d.diferencia_saldo_bs<0),0) AS total_deudas_bs,
+  IFNULL((SELECT SUM(diferencia_saldo_bs)  FROM despachos d WHERE d.id_periodo=s.id_periodo AND d.tipo_salida='INTERNO_BATALLON' AND d.anulado=0 AND d.saldo_arrastrado=0 AND d.diferencia_saldo_bs>0),0) AS total_saldos_favor_bs
 FROM v_stock_disponible s;
 
 -- @@UNIDADES@@
