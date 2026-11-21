@@ -1,5 +1,6 @@
 *.xlsx
 *.pdf
+*.msi
 __pycache__/
 app/
 Respaldos_Locales/
