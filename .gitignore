@@ -1,4 +1,8 @@
 *.xlsx
 *.pdf
 __pycache__/
+app/
+Respaldos_Locales/
+
+
 
