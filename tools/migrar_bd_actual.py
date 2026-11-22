@@ -33,6 +33,10 @@ with conn.cursor() as cur:
         cur.execute("UPDATE periodos_cierre SET numero_en_anio=1, anio_calendario=2026, mes_numero=12, nombre_periodo='Diciembre' WHERE id_periodo=1")
         cur.execute("UPDATE periodos_cierre SET numero_en_anio=1, anio_calendario=2027, mes_numero=1, nombre_periodo='Enero' WHERE id_periodo=2")
 
+    cur.execute("SHOW COLUMNS FROM usuarios LIKE 'pin_seguridad'")
+    if not cur.fetchone():
+        cur.execute("ALTER TABLE usuarios ADD COLUMN pin_seguridad VARCHAR(20) NULL AFTER password_hash")
+
     cur.execute("SHOW COLUMNS FROM historial_accesos LIKE 'equipo'")
     if cur.fetchone():
         cur.execute("ALTER TABLE historial_accesos DROP COLUMN equipo")

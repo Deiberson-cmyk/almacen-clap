@@ -19,7 +19,8 @@ CREATE TABLE usuarios (
   nombre_completo   VARCHAR(100) NOT NULL,
   rol               ENUM('MASTER','OPERADOR') NOT NULL,
   password_hash     VARCHAR(255) NOT NULL,
-  debe_cambiar_clave TINYINT(1)  NOT NULL DEFAULT 1,
+  pin_seguridad     VARCHAR(20)  NULL,
+  debe_cambiar_clave TINYINT(1)  NOT NULL DEFAULT 0,
   activo            TINYINT(1)   NOT NULL DEFAULT 1,
   fecha_creacion    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   ultimo_acceso     DATETIME     NULL
@@ -37,9 +38,9 @@ BEGIN
 END$$
 DELIMITER ;
 
--- Único usuario semilla. Clave inicial Alfa26 (PBKDF2-SHA256).
+-- Único usuario semilla. Clave inicial Alfa01 (PBKDF2-SHA256).
 INSERT INTO usuarios (usuario, nombre_completo, rol, password_hash, debe_cambiar_clave)
-VALUES ('master', 'Usuario Master', 'MASTER', 'pbkdf2_sha256$200000$/iUO6/69WuZBNPySEXpj+g==$nd12udF9QEn8wI5HE1bMyVPvXL9WKLpt5rnk55tnPLQ=', 1);
+VALUES ('master', 'Usuario Master', 'MASTER', 'pbkdf2_sha256$200000$JXLffQprqdIVdvSRljcZ6w==$J6Tor4nyPl7KqvMU6lxpjYgadQnfLEl8QLRVOzFgLR0=', 0);
 
 -- ---------------------------------------------------------------------------
 -- 2. CONFIGURACIÓN GENERAL DEL SISTEMA (ej. última ruta de respaldo)
