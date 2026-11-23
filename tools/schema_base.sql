@@ -228,7 +228,7 @@ CREATE TABLE pagos_batallon (
   id_despacho INT NOT NULL,
   id_periodo INT NOT NULL,
   id_batallon_pagador INT NOT NULL,
-  concepto_plan ENUM('PLAN_FAMILIAR','PLAN_TANGO','UNIFICADO_AMBOS','ABONO_COMPLEMENTARIO') NOT NULL,
+  concepto_plan VARCHAR(100) NOT NULL DEFAULT 'Pago unificado',
   monto_pagado_bs DECIMAL(14,2) NOT NULL CHECK (monto_pagado_bs > 0),
   referencia_bancaria VARCHAR(30) NULL,
   fecha_pago DATE NULL,
