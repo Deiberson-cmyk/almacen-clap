@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Cierre y Respaldo · Almacén CLAP{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h2>Almacén de Alimentos CLAP</h2>
+  <div class="muted" style="margin-top:-8px; margin-bottom:12px;">Fuerte Tiuna, Caracas - Reporte Ejecutivo · {{ periodo|periodo_fmt }}</div>
+  <div class="grid grid-2">
+    <div>
+      <table>
+        <tr><th>Concepto de Inventario</th><th class="num">Bolsas</th></tr>
+        <tr><td>Stock Inicial (Arrastre cierre anterior)</td><td class="num">{{ stock.stock_inicial_arrastre|int_es }}</td></tr>
+        <tr><td>(+) Entradas recibidas en el período</td><td class="num">{{ stock.entradas_periodo|int_es }}</td></tr>
+        <tr><td>(-) Despachos Internos — Plan Familiar</td><td class="num">{{ stock.desp_internos_familiar|int_es }}</td></tr>
+        <tr><td>(-) Despachos Internos — Plan Tango</td><td class="num">{{ stock.desp_internos_tango|int_es }}</td></tr>
+        <tr><td>(-) Total Despachos Internos (Batallones)</td><td class="num"><strong>{{ stock.desp_internos_total|int_es }}</strong></td></tr>
+        <tr><td>(-) Despachos Externos (Galpones Nacionales)</td><td class="num">{{ stock.desp_externos_total|int_es }}</td></tr>
+        <tr><td>(-) Salidas por Colaboración y Descarga</td><td class="num">{{ stock.colaboraciones_descarga|int_es }}</td></tr>
+        <tr style="background:#edf7f0;"><td><strong>(=) STOCK DISPONIBLE (PASA AL NUEVO PERÍODO)</strong></td><td class="num"><strong>{{ stock.stock_disponible|int_es }}</strong></td></tr>
+      </table>
+    </div>
+    <div>
+      <table>
+        <tr><th>Balance Financiero</th><th class="num">Bolívares (Bs.)</th></tr>
+        <tr><td>Precio Unitario Vigente</td><td class="num">{{ periodo.precio_unitario_bolsa|bs }}</td></tr>
+        <tr><td>Monto Total Esperado</td><td class="num"><strong>{{ rend.monto_esperado_bs|bs }}</strong></td></tr>
+        <tr><td>Monto Total Cobrado</td><td class="num" style="color:#15803d;"><strong>{{ rend.monto_cobrado_bs|bs }}</strong></td></tr>
+        <tr><td>Total Deudas Pendientes</td><td class="num" style="color:#b91c1c;"><strong>{{ rend.total_deudas_bs|bs }}</strong></td></tr>
+        <tr><td>Total Saldos a Favor (Redondeos)</td><td class="num" style="color:#1d4ed8;"><strong>{{ rend.total_saldos_favor_bs|bs }}</strong></td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <h3>Respaldo Rápido</h3>
+    <form method="post" action="{{ url_for('respaldo_rapido') }}" autocomplete="off">
+      <div style="margin-bottom:10px;">
+        <label>Período a Exportar</label>
+        <select name="id_periodo">
+          {% for p in periodos %}
+            <option value="{{ p.id_periodo }}">{{ p|periodo_fmt }} ({{ p.estado }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if ultima_ruta %}
+      <div style="margin-bottom:8px;">
+        <label style="display:flex; align-items:center; gap:6px; font-weight:500; cursor:pointer;">
+          <input type="checkbox" name="usar_ruta_anterior" value="1" class="chk-misma-ruta" data-target="rutaRapido" checked style="width:auto;">
+          Usar la misma carpeta/destino del respaldo anterior (<code>{{ ultima_ruta }}</code>)
+        </label>
+      </div>
+      {% endif %}
+      <div style="margin-bottom:10px;">
+        <label>Carpeta o Unidad Destino</label>
+        <input type="text" name="ruta_destino" id="rutaRapido" value="{{ ultima_ruta or (usb_drives[0] if usb_drives else default_local_dir) }}" required>
+      </div>
+      <button class="btn" type="submit">Generar respaldo</button>
+    </form>
+  </div>
+
+  {% if rol_actual == 'MASTER' %}
+  <div class="card" style="border-left:4px solid #1b4332;">
+    <h3>Ejecutar Cierre Manual de Período (Solo MASTER)</h3>
+    <p class="muted" style="margin-top:-4px;">
+      Período abierto actual: <strong>{{ periodo|periodo_fmt }}</strong>
+    </p>
+    <form method="post" action="{{ url_for('cierre_ejecutar') }}" onsubmit="return confirm('¿Confirma ejecutar el CIERRE MANUAL de {{ periodo|periodo_fmt }}?');" autocomplete="off">
+      <div class="form-row">
+        <div style="max-width:95px;">
+          <label>N° Período</label>
+          <input type="text" value="#{{ siguiente_meta.numero_en_anio }}" readonly style="font-weight:700; text-align:center;">
+        </div>
+        <div>
+          <label>Nombre / Mes del Nuevo Período</label>
+          <input type="text" name="nuevo_nombre" value="{{ siguiente_meta.nombre_periodo }}" required>
+        </div>
+        <div>
+          <label>Fecha de Inicio</label>
+          <input type="date" name="nueva_fecha_inicio" value="{{ siguiente_meta.fecha_inicio.isoformat() }}" required>
+        </div>
+      </div>
+      {% if ultima_ruta %}
+      <div style="margin-bottom:8px;">
+        <label style="display:flex; align-items:center; gap:6px; font-weight:500; cursor:pointer;">
+          <input type="checkbox" name="usar_ruta_anterior" value="1" class="chk-misma-ruta" data-target="rutaCierre" checked style="width:auto;">
+          Usar la misma carpeta/destino del respaldo anterior (<code>{{ ultima_ruta }}</code>)
+        </label>
+      </div>
+      {% endif %}
+      <div style="margin-bottom:10px;">
+        <label>Carpeta o Unidad Destino para el Cierre</label>
+        <input type="text" name="ruta_destino" id="rutaCierre" value="{{ ultima_ruta or (usb_drives[0] if usb_drives else default_local_dir) }}" required>
+      </div>
+      <button class="btn btn-cierre" type="submit">Ejecutar Cierre Manual Ahora</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Historial de Períodos y Respaldos Generados</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Fecha / Hora</th><th>Tipo</th><th>Período</th><th>Usuario</th><th>Ruta Generada</th><th>Archivos</th></tr></thead>
+      <tbody>
+        {% for r in respaldos %}
+        <tr>
+          <td>{{ r.fecha_hora|fecha_es }}</td>
+          <td><span class="badge {{ 'b-warn' if r.tipo=='CIERRE' else 'b-ok' }}">{{ r.tipo }}</span></td>
+          <td>{{ r|periodo_fmt }}</td>
+          <td>{{ r.usuario }}</td>
+          <td><small><code>{{ r.ruta_destino }}</code></small></td>
+          <td><small>{{ r.archivos }}</small></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">Todavía no se han generado respaldos.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const ULTIMA_RUTA = {{ (ultima_ruta or '')|tojson }};
+document.querySelectorAll('.chk-misma-ruta').forEach(chk => {
+  const inp = document.getElementById(chk.dataset.target);
+  chk.addEventListener('change', () => {
+    if (chk.checked && ULTIMA_RUTA) {
+      inp.value = ULTIMA_RUTA;
+    }
+  });
+  inp.addEventListener('input', () => {
+    if (chk.checked && inp.value !== ULTIMA_RUTA) {
+      chk.checked = false;
+    }
+  });
+});
+</script>
+{% endblock %}

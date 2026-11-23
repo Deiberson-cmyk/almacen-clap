@@ -2,8 +2,8 @@
 *.pdf
 *.msi
 __pycache__/
-app/
+*.py[cod]
+.venv/
+venv/
+app/config.json
 Respaldos_Locales/
-
-
-

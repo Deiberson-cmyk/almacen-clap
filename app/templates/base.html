@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Almacén CLAP - Ejército Bolivariano{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+{% if user_actual %}
+<div class="topbar">
+  <div class="brand">
+    ALMACÉN DE ALIMENTOS CLAP · EJÉRCITO BOLIVARIANO
+    <small>Fuerte Tiuna, Caracas · Operación 100% Local Offline</small>
+  </div>
+  <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    {% if periodo_activo %}
+      <div class="status-pill">
+        Período: <strong>{{ periodo_activo|periodo_fmt }}</strong> |
+        Precio: <strong>{{ periodo_activo.precio_unitario_bolsa|bs }}</strong> |
+        Stock: <strong>{{ stock_actual.stock_disponible|int_es if stock_actual else '0' }} bolsas</strong>
+      </div>
+    {% endif %}
+    <div class="status-pill">
+      {{ nombre_actual }} (<strong>{{ rol_actual }}</strong>)
+      · <a href="{{ url_for('logout') }}" style="color:#ffd166; text-decoration:none; font-weight:700;">Salir</a>
+    </div>
+  </div>
+</div>
+<nav class="nav">
+  <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint=='dashboard' }}">Panel Principal</a>
+  <a href="{{ url_for('entradas') }}" class="{{ 'active' if request.endpoint=='entradas' }}">Entradas de Lote</a>
+  <a href="{{ url_for('colaboraciones') }}" class="{{ 'active' if request.endpoint=='colaboraciones' }}">Colaboración y Descarga</a>
+  <a href="{{ url_for('despachos') }}" class="{{ 'active' if request.endpoint in ('despachos','despacho_pagos') }}">Despachos y Pagos</a>
+  {% if rol_actual == 'MASTER' %}
+    <a href="{{ url_for('catalogos') }}" class="{{ 'active' if request.endpoint=='catalogos' }}">Batallones y Galpones</a>
+    <a href="{{ url_for('usuarios') }}" class="{{ 'active' if request.endpoint=='usuarios' }}">Usuarios</a>
+    <a href="{{ url_for('auditoria') }}" class="{{ 'active' if request.endpoint=='auditoria' }}">Auditoría y Accesos</a>
+  {% endif %}
+  <a href="{{ url_for('cierre') }}" class="{{ 'active' if request.endpoint=='cierre' }}">Cierre y Respaldo</a>
+</nav>
+{% endif %}
+
+<div class="container">
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in msgs %}
+      <div class="flash {{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</div>
+
+<script>
+/**
+ * Evita autocompletado/historial del navegador en campos de observaciones
+ * asignando un atributo `name` dinámico por cada carga de página.
+ */
+function initObsFields() {
+  const ts = Date.now();
+  document.querySelectorAll('.obs-input').forEach((inp, idx) => {
+    const dynName = 'obs_' + ts + '_' + idx;
+    inp.setAttribute('autocomplete', 'new-password');
+    inp.setAttribute('name', dynName);
+    if (inp.dataset.reset !== 'false') {
+      inp.value = '';
+    }
+    const form = inp.closest('form');
+    if (form) {
+      form.setAttribute('autocomplete', 'off');
+      let hidden = form.querySelector('.obs-key');
+      if (hidden) hidden.value = dynName;
+      form.addEventListener('submit', () => {
+        if (hidden) hidden.value = inp.name;
+      });
+    }
+  });
+}
+
+/**
+ * Facilita la escritura en inputs numéricos reemplazando el '0' inicial al teclear.
+ */
+function initNumericInputs() {
+  document.querySelectorAll('input[type="number"]').forEach((inp) => {
+    if (inp.dataset.numBound) return;
+    inp.dataset.numBound = '1';
+    inp.addEventListener('focus', () => {
+      if (inp.value === '0' || inp.value === '0.00') {
+        inp.select();
+      }
+    });
+    inp.addEventListener('keydown', (e) => {
+      if ((inp.value === '0' || inp.value === '0.00') && /^\d$/.test(e.key)) {
+        inp.value = '';
+      }
+    });
+    inp.addEventListener('input', () => {
+      if (/^0+\d/.test(inp.value)) {
+        inp.value = inp.value.replace(/^0+(\d)/, '$1');
+      }
+    });
+  });
+}
+
+/**
+ * Restringe los campos de código PIN (.pin-9) a un máximo de 9 dígitos numéricos.
+ */
+function initPinInputs() {
+  document.querySelectorAll('.pin-9').forEach((inp) => {
+    if (inp.dataset.pinBound) return;
+    inp.dataset.pinBound = '1';
+    inp.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const allowed = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End'];
+      if (allowed.includes(e.key)) return;
+      if (!/^\d$/.test(e.key) || (inp.value.length >= 9 && inp.selectionStart === inp.selectionEnd)) {
+        e.preventDefault();
+      }
+    });
+    inp.addEventListener('input', () => {
+      inp.value = inp.value.replace(/\D/g, '').slice(0, 9);
+    });
+  });
+}
+
+/**
+ * Valida antes de enviar que los formularios de anulación (.form-anular)
+ * incluyan un código de seguridad numérico de 1 a 9 dígitos.
+ */
+function initAnularForms() {
+  document.querySelectorAll('.form-anular').forEach((f) => {
+    if (f.dataset.anularBound) return;
+    f.dataset.anularBound = '1';
+    f.addEventListener('submit', (e) => {
+      const pinInput = f.querySelector('input[name="pin_confirmacion"]');
+      if (pinInput && !/^\d{1,9}$/.test(pinInput.value.trim())) {
+        e.preventDefault();
+        alert('Debe ingresar su código de seguridad numérico (máximo 9 dígitos).');
+        pinInput.focus();
+      }
+    });
+  });
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  initObsFields();
+  initNumericInputs();
+  initPinInputs();
+  initAnularForms();
+});
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) initObsFields();
+});
+</script>
+</body>
+</html>

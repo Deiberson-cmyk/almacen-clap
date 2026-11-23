@@ -1,0 +1,261 @@
+/* ============================================================================
+   Hoja de Estilos Principal - Sistema Local Almacén de Alimentos CLAP
+   Paleta institucional verde militar / blanco de alto contraste para PCs locales.
+   ============================================================================ */
+
+/* --- 1. Variables de color y reset básico --- */
+:root {
+  --primary: #1b4332;
+  --primary-light: #2d6a4f;
+  --accent: #40916c;
+  --bg: #f4f6f5;
+  --card: #ffffff;
+  --text: #1f2933;
+  --muted: #616e7c;
+  --border: #dce1e5;
+  --danger: #b91c1c;
+  --danger-bg: #fee2e2;
+  --warn: #b45309;
+  --warn-bg: #fef3c7;
+  --ok: #15803d;
+  --ok-bg: #dcfce7;
+  --info: #1d4ed8;
+  --info-bg: #dbeafe;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* --- 2. Barra superior institucional y menú de navegación --- */
+.topbar {
+  background: var(--primary);
+  color: #fff;
+  padding: 10px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.topbar .brand { font-weight: 700; font-size: 15px; letter-spacing: 0.3px; }
+.topbar .brand small { display: block; font-weight: 400; font-size: 11px; opacity: 0.85; }
+.topbar .status-pill {
+  background: rgba(255,255,255,0.14);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.nav {
+  background: #143326;
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0 12px;
+  border-bottom: 2px solid var(--accent);
+}
+.nav a {
+  color: #e5ece8;
+  text-decoration: none;
+  padding: 10px 13px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.nav a:hover, .nav a.active {
+  background: var(--primary-light);
+  color: #fff;
+}
+
+/* --- 3. Contenedores, tarjetas y cuadrículas KPI --- */
+.container { max-width: 1320px; margin: 18px auto; padding: 0 16px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.card h2, .card h3 { margin: 0 0 12px 0; color: var(--primary); font-size: 16px; }
+.grid { display: grid; gap: 12px; }
+.grid-4 { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.grid-3 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.kpi {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+.kpi.green { border-left-color: var(--ok); }
+.kpi.red { border-left-color: var(--danger); }
+.kpi.blue { border-left-color: var(--info); }
+.kpi.warn { border-left-color: var(--warn); }
+.kpi .label { font-size: 11px; color: var(--muted); text-transform: uppercase; font-weight: 600; }
+.kpi .value { font-size: 22px; font-weight: 700; margin-top: 4px; color: var(--text); }
+.kpi .sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+/* --- 4. Alertas / mensajes flash --- */
+.flash { padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-weight: 500; }
+.flash.ok { background: var(--ok-bg); color: var(--ok); border: 1px solid #86efac; }
+.flash.error { background: var(--danger-bg); color: var(--danger); border: 1px solid #fca5a5; }
+.flash.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #fcd34d; }
+.flash.info { background: var(--info-bg); color: var(--info); border: 1px solid #93c5fd; }
+
+/* --- 5. Formularios, campos compactos y botones --- */
+label { display: block; font-size: 12px; font-weight: 600; color: #334e68; margin-bottom: 4px; }
+input, select, textarea {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid #cbd2d9;
+  border-radius: 5px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+}
+input[readonly] { background: #f1f5f3; color: #334e68; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary-light); }
+.form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.field-compact { max-width: 195px; }
+.input-compact { max-width: 175px; }
+.btn {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  background: var(--primary);
+  color: #fff;
+}
+.btn:hover { background: var(--primary-light); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-sm { padding: 4px 9px; font-size: 12px; }
+.btn-danger { background: var(--danger); }
+.btn-danger:hover { background: #991b1b; }
+.btn-warn, .btn-edit { background: #1e4d7b; }
+.btn-warn:hover, .btn-edit:hover { background: #163a5c; }
+.btn-cierre { background: #b45309; }
+.btn-cierre:hover { background: #92400e; }
+.btn-sec { background: #52606d; }
+.btn-sec:hover { background: #3e4c59; }
+
+/* --- 6. Tablas de datos y etiquetas de estado (badges) --- */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th, td { padding: 7px 9px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+th { background: #edf2ef; color: var(--primary); font-weight: 700; white-space: nowrap; }
+tr.anulado { opacity: 0.55; text-decoration: line-through; background: #fff5f5; }
+.badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.b-ok { background: var(--ok-bg); color: var(--ok); }
+.b-warn { background: var(--warn-bg); color: var(--warn); }
+.b-err { background: var(--danger-bg); color: var(--danger); }
+.b-info { background: var(--info-bg); color: var(--info); }
+.b-muted { background: #e5e7eb; color: #374151; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+details summary { cursor: pointer; font-weight: 600; color: var(--primary); }
+.login-box { max-width: 390px; margin: 70px auto; }
+.inline-form { display: inline; }
+.muted { color: var(--muted); font-size: 12px; }
+.radio-cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.radio-card {
+  flex: 1;
+  min-width: 240px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fafafa;
+}
+.radio-card.selected { border-color: var(--primary); background: #edf7f0; }
+.radio-card input { width: auto; }
+.hidden { display: none !important; }
+
+/* --- 7. Combobox predictivo para selección de unidades militares --- */
+.combo-wrap { position: relative; }
+.combo-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: #fff;
+  border: 1px solid #9aa5b1;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  max-height: 230px;
+  overflow-y: auto;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+  display: none;
+}
+.combo-list.open { display: block; }
+.combo-item { padding: 7px 10px; cursor: pointer; border-bottom: 1px solid #f0f2f4; font-size: 13px; }
+.combo-item:hover { background: #edf7f0; color: #1b4332; }
+.combo-empty { padding: 8px 10px; color: var(--muted); font-size: 12px; }
+
+/* --- 8. Prefijo fijo 'V-' para campos de cédula --- */
+.input-prefix-wrap { display: flex; align-items: stretch; }
+.input-prefix {
+  background: #edf2ef;
+  border: 1px solid #cbd2d9;
+  border-right: none;
+  border-radius: 5px 0 0 5px;
+  padding: 7px 10px;
+  font-weight: 700;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+.input-prefix-wrap input { border-radius: 0 5px 5px 0; }
+
+/* --- 9. Desglose de liquidación financiera y panel de pagos múltiples --- */
+.liquidacion-box {
+  background: #f8faf9;
+  border: 1px solid #cbd2d9;
+  border-left: 4px solid var(--primary);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.liq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+.pago-panel {
+  background: #f7faf8;
+  border: 1px solid #cbd2d9;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.pago-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr 0.9fr auto;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 8px;
+  background: #fff;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+@media (max-width: 760px) {
+  .pago-row { grid-template-columns: 1fr; }
+}

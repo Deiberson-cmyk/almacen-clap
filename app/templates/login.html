@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Acceso · Almacén CLAP{% endblock %}
+{% block content %}
+<div class="login-box card">
+  <div style="text-align:center; margin-bottom:16px;">
+    <h2 style="margin-bottom:4px;">ALMACÉN DE ALIMENTOS CLAP</h2>
+    <div class="muted">Fuerte Tiuna, Caracas · Sistema Local Offline</div>
+  </div>
+  <form method="post" id="loginForm" autocomplete="off">
+    <input type="hidden" name="user_key" id="userKey">
+    <input type="hidden" name="pass_key" id="passKey">
+    <div style="margin-bottom:10px;">
+      <label for="loginUser">Usuario</label>
+      <input type="text" id="loginUser" autocomplete="new-password" readonly style="background:#fff; color:var(--text);" required>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label for="loginPass">Contraseña</label>
+      <input type="password" id="loginPass" autocomplete="new-password" readonly style="background:#fff; color:var(--text);" required>
+    </div>
+    <button type="submit" class="btn" style="width:100%;">Iniciar Sesión</button>
+  </form>
+</div>
+
+<script>
+(function () {
+  const uInp = document.getElementById('loginUser');
+  const pInp = document.getElementById('loginPass');
+  const uKey = document.getElementById('userKey');
+  const pKey = document.getElementById('passKey');
+  const form = document.getElementById('loginForm');
+  if (!uInp || !pInp || !form) return;
+
+  function unlockInput(inp) {
+    if (inp.hasAttribute('readonly')) {
+      inp.removeAttribute('readonly');
+    }
+  }
+
+  function setupCleanLogin(forceReset) {
+    const ts = Date.now() + '_' + Math.floor(Math.random() * 10000);
+    const uName = 'user_' + ts;
+    const pName = 'pass_' + ts;
+
+    uInp.setAttribute('name', uName);
+    pInp.setAttribute('name', pName);
+    uInp.setAttribute('autocomplete', 'new-password');
+    pInp.setAttribute('autocomplete', 'new-password');
+    uKey.value = uName;
+    pKey.value = pName;
+
+    if (forceReset) {
+      if (document.activeElement === uInp) uInp.blur();
+      if (document.activeElement === pInp) pInp.blur();
+      uInp.value = '';
+      pInp.value = '';
+      uInp.setAttribute('readonly', 'readonly');
+      pInp.setAttribute('readonly', 'readonly');
+    } else {
+      uInp.value = '';
+      pInp.value = '';
+      if (document.activeElement !== uInp) {
+        uInp.setAttribute('readonly', 'readonly');
+      } else {
+        unlockInput(uInp);
+      }
+      if (document.activeElement !== pInp) {
+        pInp.setAttribute('readonly', 'readonly');
+      } else {
+        unlockInput(pInp);
+      }
+    }
+  }
+
+  [uInp, pInp].forEach((inp) => {
+    ['focus', 'pointerdown', 'mousedown', 'touchstart', 'keydown'].forEach((evt) => {
+      inp.addEventListener(evt, () => unlockInput(inp));
+    });
+  });
+
+  setupCleanLogin(false);
+
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) {
+      setupCleanLogin(true);
+    }
+  });
+
+  form.addEventListener('submit', () => {
+    uKey.value = uInp.name;
+    pKey.value = pInp.name;
+  });
+})();
+</script>
+{% endblock %}

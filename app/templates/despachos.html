@@ -1,0 +1,709 @@
+{% extends "base.html" %}
+{% block title %}Despachos y Pagos · Almacén CLAP{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+    <h2 style="margin:0;">
+      {% if edit_desp %}
+        Editar Despacho {{ edit_desp.codigo_movimiento }}
+      {% else %}
+        Registrar Nuevo Despacho
+      {% endif %}
+    </h2>
+    {% if edit_desp %}
+      <a href="{{ url_for('despachos') }}" class="btn btn-sm btn-sec">Cancelar edición</a>
+    {% endif %}
+  </div>
+
+  <form method="post"
+        action="{{ url_for('despachos_editar', did=edit_desp.id_despacho) if edit_desp else url_for('despachos_crear') }}"
+        id="formDespacho"
+        autocomplete="off">
+    <input type="hidden" name="obs_key" class="obs-key" value="">
+
+    {% if not edit_desp %}
+    <div class="radio-cards">
+      <label class="radio-card selected" id="cardInt" onclick="setTipo('INTERNO_BATALLON')">
+        <input type="radio" name="tipo_salida" value="INTERNO_BATALLON" checked>
+        <div><strong>Retiro Interno</strong></div>
+      </label>
+      <label class="radio-card" id="cardExt" onclick="setTipo('EXTERNO_GALPON')">
+        <input type="radio" name="tipo_salida" value="EXTERNO_GALPON">
+        <div><strong>Retiro Externo</strong></div>
+      </label>
+    </div>
+    {% else %}
+      <input type="hidden" name="tipo_salida" value="{{ edit_desp.tipo_salida }}">
+    {% endif %}
+
+    <div class="form-row">
+      <div style="max-width:240px;">
+        <label>Fecha del Despacho</label>
+        <input type="date" name="fecha_despacho" value="{{ edit_desp.fecha_despacho if edit_desp else hoy }}" required>
+      </div>
+    </div>
+
+    <!-- BLOQUE INTERNO -->
+    <div id="bloqueInterno" class="{{ 'hidden' if edit_desp and edit_desp.tipo_salida == 'EXTERNO_GALPON' }}">
+      <div class="form-row">
+        <div style="grid-column: span 2;">
+          <label>Unidad Beneficiaria (a quien se asigna y cobra)</label>
+          <div class="combo-wrap">
+            <input type="hidden" name="id_batallon_beneficiario" id="idBenef" value="{{ edit_desp.id_batallon_beneficiario if edit_desp and edit_desp.id_batallon_beneficiario else '' }}">
+            <input type="text" id="benefSearch" value="{{ edit_meta.benef_display if edit_desp else '' }}" placeholder="Escriba código o nombre" autocomplete="off">
+            <div class="combo-list" id="benefList"></div>
+          </div>
+          <div id="infoBenefGrupo" class="muted" style="margin-top:4px;"></div>
+        </div>
+
+        <div style="grid-column: span 2;">
+          <label>Batallón / Unidad que Retira Físicamente</label>
+          <div class="combo-wrap">
+            <input type="hidden" name="id_batallon_retira" id="idRetira" value="{{ (edit_desp.id_batallon_retira or edit_desp.id_batallon_beneficiario) if edit_desp and edit_desp.id_batallon_beneficiario else '' }}">
+            <input type="text" id="retiraSearch" value="{{ edit_meta.retira_display if edit_desp else '' }}" placeholder="Escriba código o nombre" autocomplete="off">
+            <div class="combo-list" id="retiraList"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="alertaSaldoUnit" class="flash hidden" style="margin-bottom:10px;"></div>
+
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom:10px;">
+        <div class="field-compact">
+          <label>Bolsas Plan FAMILIAR</label>
+          <input type="number" name="cantidad_familiar" id="cantFam" class="input-compact" min="0" value="{{ edit_desp.cantidad_familiar if edit_desp else 0 }}" oninput="recalcLiquidacion()">
+        </div>
+        <div class="field-compact">
+          <label>Bolsas Plan TANGO</label>
+          <input type="number" name="cantidad_tango" id="cantTan" class="input-compact" min="0" value="{{ edit_desp.cantidad_tango if edit_desp else 0 }}" oninput="recalcLiquidacion()">
+        </div>
+        <div style="flex:1; min-width:210px;">
+          <label>Nombre del retirante *</label>
+          <input type="text" name="nombre_autorizado_retiro" id="nomRetirante" value="{{ edit_desp.nombre_autorizado_retiro or '' if edit_desp else '' }}" placeholder="Nombre y Apellido">
+        </div>
+        <div class="field-compact">
+          <label>Cédula del retirante *</label>
+          <div class="input-prefix-wrap">
+            <span class="input-prefix">V-</span>
+            <input type="text" name="cedula_autorizado_num" id="cedAutorizado" class="ced-digits" inputmode="numeric" maxlength="10" value="{{ edit_meta.ced_aut_num if edit_desp else '' }}" placeholder="">
+          </div>
+        </div>
+      </div>
+
+      <div class="liquidacion-box">
+        <div class="liq-grid">
+          <div>
+            <div class="muted">Total Bolsas</div>
+            <strong id="liqBolsas" style="font-size:16px;">0 bolsas</strong>
+          </div>
+          <div>
+            <div class="muted">Subtotal Bolsas Actuales</div>
+            <strong id="liqSubtotal" style="font-size:16px;">0,00 Bs.</strong>
+          </div>
+          <div>
+            <div class="muted" id="liqSaldoLabel">Deuda Anterior / Saldo a Favor</div>
+            <strong id="liqSaldoAnt" style="font-size:16px;">0,00 Bs.</strong>
+          </div>
+          <div>
+            <div class="muted">Total Definitivo a Pagar</div>
+            <strong id="liqTotal" style="font-size:18px; color:#1b4332;">0,00 Bs.</strong>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:10px;">
+        <label style="display:inline-flex; align-items:center; gap:7px; cursor:pointer; font-size:13px;">
+          <input type="checkbox" name="tiene_recibo" id="chkRecibo" value="1" style="width:auto;"
+                 {{ 'checked' if edit_desp and (edit_desp.tiene_recibo == 1 or edit_pagos|length > 0) }}
+                 onchange="togglePanelPagos()">
+          Tiene recibo (Registrar pago / referencias bancarias)
+        </label>
+      </div>
+
+      <div id="panelPagos" class="pago-panel {{ '' if edit_desp and (edit_desp.tiene_recibo == 1 or edit_pagos|length > 0) else 'hidden' }}">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+          <strong>Registro de Pagos en Bolívares (Bs.)</strong>
+          <button type="button" class="btn btn-sm" onclick="addPagoRow()">+ Añadir referencia</button>
+        </div>
+        <div id="pagoRowsContainer"></div>
+        <div class="liq-grid" style="margin-top:8px; padding-top:8px; border-top:1px solid #dce1e5;">
+          <div>
+            <div class="muted">Total Adeudado / Exigible</div>
+            <strong id="pagoTotalAdeudadoTxt" style="font-size:15px;">0,00 Bs.</strong>
+          </div>
+          <div>
+            <div class="muted">Total Pagado</div>
+            <strong id="totalPagadoTxt" style="font-size:16px; color:#15803d;">0,00 Bs.</strong>
+          </div>
+          <div>
+            <div class="muted">Pendiente / Restante</div>
+            <div id="estadoPagoLive" style="font-weight:700; margin-top:2px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BLOQUE EXTERNO -->
+    <div id="bloqueExterno" class="{{ '' if edit_desp and edit_desp.tipo_salida == 'EXTERNO_GALPON' else 'hidden' }}">
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom:10px;">
+        <div style="flex:1; min-width:240px;">
+          <label>Galpón / Destino (Agregados por el MASTER)</label>
+          <select name="id_galpon_destino" id="selGalpon">
+            <option value="">-- Seleccione galpón destino --</option>
+            {% for g in galpones %}
+              <option value="{{ g.id_galpon }}" {{ 'selected' if edit_desp and edit_desp.id_galpon_destino == g.id_galpon }}>
+                {{ g.nombre_galpon }} ({{ g.estado_region or 'Sin estado' }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field-compact">
+          <label>Total de Bolsas a Enviar</label>
+          <input type="number" name="ext_total_bolsas" id="extTotal" class="input-compact" min="0" value="{{ edit_desp.total_bolsas if edit_desp and edit_desp.tipo_salida=='EXTERNO_GALPON' else '' }}" placeholder="">
+        </div>
+        <div class="field-compact">
+          <label>Familiar (Opcional)</label>
+          <input type="number" name="ext_familiar" class="input-compact" min="0" value="{{ edit_desp.cantidad_familiar if edit_desp else 0 }}">
+        </div>
+        <div class="field-compact">
+          <label>Tango (Opcional)</label>
+          <input type="number" name="ext_tango" class="input-compact" min="0" value="{{ edit_desp.cantidad_tango if edit_desp else 0 }}">
+        </div>
+      </div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom:10px;">
+        <div style="flex:1; min-width:210px;">
+          <label>Nombre del Conductor</label>
+          <input type="text" name="nombre_conductor" value="{{ edit_desp.nombre_conductor or '' if edit_desp else '' }}" placeholder="Nombre y Apellido">
+        </div>
+        <div class="field-compact">
+          <label>Cédula del Conductor</label>
+          <div class="input-prefix-wrap">
+            <span class="input-prefix">V-</span>
+            <input type="text" name="cedula_conductor_num" id="cedConductor" class="ced-digits" inputmode="numeric" maxlength="10" value="{{ edit_meta.ced_cond_num if edit_desp else '' }}" placeholder="">
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Vehículo o Transporte</label>
+          <div style="display:flex; gap:18px; align-items:center; padding:8px 0;">
+            <label style="display:inline-flex; align-items:center; gap:6px; margin:0; cursor:pointer; font-weight:500;">
+              <input type="checkbox" name="vehiculo_tipo[]" value="Camión" style="width:auto;" {{ 'checked' if edit_desp and edit_meta.veh_camion }}> Camión
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:6px; margin:0; cursor:pointer; font-weight:500;">
+              <input type="checkbox" name="vehiculo_tipo[]" value="Transporte" style="width:auto;" {{ 'checked' if edit_desp and edit_meta.veh_transporte }}> Transporte
+            </label>
+          </div>
+        </div>
+        <div>
+          <label>Placa del Vehículo</label>
+          <input type="text" name="placa_vehiculo" id="placaVehiculo" maxlength="8" value="{{ edit_desp.placa_vehiculo or '' if edit_desp else '' }}" placeholder="">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label>Observaciones (Opcional)</label>
+        <input type="text" class="obs-input" autocomplete="new-password"
+               {% if edit_desp %}data-reset="false" value="{{ edit_desp.observaciones or '' }}"{% endif %}
+               placeholder="">
+      </div>
+      {% if edit_desp %}
+      <div>
+        <label>Motivo de la Edición (Obligatorio)</label>
+        <input type="text" name="motivo" placeholder="Motivo de edición" required>
+      </div>
+      {% endif %}
+    </div>
+
+    <div id="decisionButtons" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <button type="submit" class="btn" id="btnGuardarDespacho">
+        {{ 'Guardar Cambios' if edit_desp else 'Despachar' }}
+      </button>
+      <span id="msgDecision" class="muted"></span>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+    <h3 style="margin:0;">Despachos del Período Activo</h3>
+    <div style="display:flex; gap:6px;">
+      <a href="{{ url_for('despachos', tipo='TODOS') }}" class="btn btn-sm {{ '' if filtro_tipo=='TODOS' else 'btn-sec' }}">Todos</a>
+      <a href="{{ url_for('despachos', tipo='INTERNO_BATALLON') }}" class="btn btn-sm {{ '' if filtro_tipo=='INTERNO_BATALLON' else 'btn-sec' }}">Internos (Batallones)</a>
+      <a href="{{ url_for('despachos', tipo='EXTERNO_GALPON') }}" class="btn btn-sm {{ '' if filtro_tipo=='EXTERNO_GALPON' else 'btn-sec' }}">Externos (Galpones)</a>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th><th>Tipo / Fecha</th><th>Beneficiario / Destino</th>
+          <th class="num">Fam.</th><th class="num">Tango</th><th class="num">Total</th>
+          <th class="num">Neto</th><th class="num">Pagado</th><th>Estado Pago</th><th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in despachos %}
+        <tr class="{{ 'anulado' if d.anulado }}">
+          <td><strong>{{ d.codigo_movimiento }}</strong></td>
+          <td>
+            {% if d.tipo_salida == 'INTERNO_BATALLON' %}<span class="badge b-ok">INTERNO</span>{% else %}<span class="badge b-info">EXTERNO</span>{% endif %}
+            <br><small>{{ d.fecha_despacho|fecha_es }}</small>
+          </td>
+          <td>
+            {% if d.tipo_salida == 'INTERNO_BATALLON' %}
+              <strong>{{ d.benef_nombre }}</strong>
+              {% if d.codigos_agrupados_texto %}<br><small class="muted">{{ d.codigos_agrupados_texto }}</small>{% endif %}
+              {% if d.retira_nombre and d.retira_nombre != d.benef_nombre %}
+                <br><small style="color:#1d4ed8;">Retiró: {{ d.retira_nombre }}</small>
+              {% endif %}
+              {% if d.nombre_autorizado_retiro %}
+                <br><small class="muted">Retirante: {{ d.nombre_autorizado_retiro }} ({{ d.cedula_autorizado_retiro or '-' }})</small>
+              {% endif %}
+            {% else %}
+              <strong>{{ d.nombre_galpon }}</strong> ({{ d.estado_region or '-' }})
+              <br><small class="muted">Cond.: {{ d.nombre_conductor or '-' }} ({{ d.cedula_conductor or '-' }}) | {{ d.vehiculo_descripcion or '-' }} | Placa: {{ d.placa_vehiculo or '-' }}</small>
+            {% endif %}
+            {% if d.observaciones %}<br><small class="muted">Obs: {{ d.observaciones }}</small>{% endif %}
+          </td>
+          <td class="num">{{ d.cantidad_familiar|int_es }}</td>
+          <td class="num">{{ d.cantidad_tango|int_es }}</td>
+          <td class="num"><strong>{{ d.total_bolsas|int_es }}</strong></td>
+          <td class="num">{% if d.tipo_salida=='INTERNO_BATALLON' %}{{ d.monto_neto_exigible_bs|bs }}{% else %}-{% endif %}</td>
+          <td class="num">{% if d.tipo_salida=='INTERNO_BATALLON' %}{{ d.monto_total_pagado_bs|bs }} <small>({{ d.num_pagos }})</small>{% else %}-{% endif %}</td>
+          <td>
+            {% if d.anulado %}<span class="badge b-err">ANULADO</span>
+            {% elif d.tipo_salida == 'EXTERNO_GALPON' %}<span class="badge b-muted">NO APLICA</span>
+            {% elif d.saldo_arrastrado %}
+              {% if d.diferencia_saldo_bs > 0.005 %}
+                <span class="badge b-info">A FAVOR (+{{ d.diferencia_saldo_bs|bs }})</span>
+                <br><small class="muted" style="font-weight:600;">(Trasladado a post.)</small>
+              {% elif d.diferencia_saldo_bs < -0.005 %}
+                <span class="badge b-warn">DEUDA ({{ d.diferencia_saldo_bs|bs }})</span>
+                <br><small class="muted" style="font-weight:600;">(Arrastrada a post.)</small>
+              {% else %}
+                <span class="badge b-ok">PAGADO</span>
+                <br><small class="muted" style="font-weight:600;">(Solvente)</small>
+              {% endif %}
+            {% elif d.estado_financiero == 'PAGADO' %}<span class="badge b-ok">PAGADO</span>
+            {% elif d.estado_financiero == 'SALDO_A_FAVOR' %}<span class="badge b-info">A FAVOR (+{{ d.diferencia_saldo_bs|bs }})</span>
+            {% elif d.estado_financiero == 'PARCIAL' %}<span class="badge b-warn">DEUDA ({{ d.diferencia_saldo_bs|bs }})</span>
+            {% else %}<span class="badge b-err">PENDIENTE</span>{% endif %}
+          </td>
+          <td>
+            {% if not d.anulado %}
+              <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                <a class="btn btn-sm btn-warn" href="{{ url_for('despachos', editar=d.id_despacho) }}">Editar</a>
+                {% if d.tipo_salida == 'INTERNO_BATALLON' %}
+                  <a class="btn btn-sm" href="{{ url_for('despacho_pagos', did=d.id_despacho) }}">Pagos ({{ d.num_pagos }})</a>
+                {% endif %}
+              </div>
+              {% if rol_actual == 'MASTER' %}
+              <details style="margin-top:4px;">
+                <summary style="color:#b91c1c;">Anular (MASTER)</summary>
+                <form method="post" action="{{ url_for('despachos_anular', did=d.id_despacho) }}" class="form-anular" style="margin-top:6px; min-width:210px;" autocomplete="off">
+                  <input type="text" name="motivo" placeholder="Motivo de anulación" required style="margin-bottom:4px;">
+                  {% if not es_soporte %}
+                    <input type="password" name="pin_confirmacion" class="pin-9" inputmode="numeric" maxlength="9"
+                           autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"
+                           placeholder="Código de seguridad" required style="margin-bottom:4px;">
+                  {% endif %}
+                  <button class="btn btn-sm btn-danger" type="submit">Confirmar anulación</button>
+                </form>
+              </details>
+              {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="muted">Sin despachos registrados en este período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const IS_EDIT = {{ 'true' if edit_desp else 'false' }};
+const EDIT_UNIT_ID = {{ edit_desp.id_batallon_beneficiario if edit_desp and edit_desp.id_batallon_beneficiario else 'null' }};
+const EDIT_SALDO_ANT = {{ edit_meta.saldo_ant|float if edit_desp else 0 }};
+const EDIT_PAGOS = {{ edit_meta.pagos_json|tojson if edit_desp else '[]' }};
+const PRECIO = {{ (edit_meta.precio_aplicado if edit_desp else (periodo_activo.precio_unitario_bolsa|float if periodo_activo else 0)) }};
+const UNIDADES = {{ unidades_json|tojson }};
+
+let tipoActual = {{ (edit_desp.tipo_salida if edit_desp else 'INTERNO_BATALLON')|tojson }};
+let saldoAnteriorUnit = IS_EDIT ? EDIT_SALDO_ANT : 0;
+
+function fmtBs(val) {
+  const n = Number(val || 0);
+  return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Bs.';
+}
+
+function setTipo(t) {
+  if (IS_EDIT) return;
+  tipoActual = t;
+  document.getElementById('bloqueInterno').classList.toggle('hidden', t !== 'INTERNO_BATALLON');
+  document.getElementById('bloqueExterno').classList.toggle('hidden', t !== 'EXTERNO_GALPON');
+  document.getElementById('cardInt').classList.toggle('selected', t === 'INTERNO_BATALLON');
+  document.getElementById('cardExt').classList.toggle('selected', t === 'EXTERNO_GALPON');
+  recalcPagos();
+}
+
+function setupUnitCombo(inputEl, listEl, hiddenEl, onSelect) {
+  function renderMatches(q) {
+    const term = (q || '').trim().toLowerCase();
+    listEl.innerHTML = '';
+    if (!term) {
+      listEl.classList.remove('open');
+      return;
+    }
+    const matches = UNIDADES.filter(u => u.display.toLowerCase().includes(term)).slice(0, 25);
+    if (matches.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'combo-empty';
+      empty.textContent = 'Sin coincidencias en el catálogo';
+      listEl.appendChild(empty);
+    } else {
+      matches.forEach(u => {
+        const item = document.createElement('div');
+        item.className = 'combo-item';
+        let extra = '';
+        if (u.grupo) extra += ' · [' + u.grupo + ']';
+        if (u.saldo > 0.005) extra += ' · A favor: +' + fmtBs(u.saldo);
+        else if (u.saldo < -0.005) extra += ' · Deuda: ' + fmtBs(Math.abs(u.saldo));
+        item.innerHTML = '<strong>' + u.display + '</strong>' + (extra ? '<br><small class="muted">' + extra + '</small>' : '');
+        item.addEventListener('mousedown', (ev) => {
+          ev.preventDefault();
+          inputEl.value = u.display.toUpperCase();
+          hiddenEl.value = u.id;
+          listEl.classList.remove('open');
+          onSelect(u);
+        });
+        listEl.appendChild(item);
+      });
+    }
+    listEl.classList.add('open');
+  }
+
+  inputEl.addEventListener('input', () => {
+    inputEl.value = inputEl.value.toUpperCase();
+    hiddenEl.value = '';
+    if (inputEl.id === 'benefSearch') {
+      saldoAnteriorUnit = 0;
+      document.getElementById('infoBenefGrupo').textContent = '';
+      document.getElementById('alertaSaldoUnit').classList.add('hidden');
+      recalcLiquidacion();
+    }
+    renderMatches(inputEl.value);
+  });
+
+  inputEl.addEventListener('focus', () => {
+    if (inputEl.id === 'retiraSearch' && hiddenEl.value) {
+      inputEl.select();
+    }
+    if (inputEl.value.trim() && !hiddenEl.value) {
+      renderMatches(inputEl.value);
+    }
+  });
+
+  inputEl.addEventListener('blur', () => {
+    setTimeout(() => listEl.classList.remove('open'), 150);
+  });
+}
+
+function showSaldoAlert(saldoVal) {
+  const alerta = document.getElementById('alertaSaldoUnit');
+  alerta.classList.remove('hidden', 'error', 'info', 'warn');
+  if (saldoVal < -0.005) {
+    alerta.classList.add('error');
+    alerta.innerHTML = '<strong>Deuda anterior pendiente:</strong> Esta unidad mantiene una deuda de <strong>' + fmtBs(Math.abs(saldoVal)) + '</strong> que se sumará automáticamente al total a pagar.';
+  } else if (saldoVal > 0.005) {
+    alerta.classList.add('info');
+    alerta.innerHTML = '<strong>Saldo a favor disponible:</strong> Esta unidad tiene <strong>' + fmtBs(saldoVal) + '</strong> a favor que se descontarán automáticamente del total a pagar.';
+  } else {
+    alerta.classList.add('hidden');
+  }
+}
+
+setupUnitCombo(
+  document.getElementById('benefSearch'),
+  document.getElementById('benefList'),
+  document.getElementById('idBenef'),
+  (u) => {
+    document.getElementById('retiraSearch').value = u.display.toUpperCase();
+    document.getElementById('idRetira').value = u.id;
+    document.getElementById('infoBenefGrupo').textContent = u.grupo ? ('Bloque agrupado: ' + u.grupo) : '';
+    saldoAnteriorUnit = (IS_EDIT && u.id === EDIT_UNIT_ID) ? EDIT_SALDO_ANT : Number(u.saldo || 0);
+    showSaldoAlert(saldoAnteriorUnit);
+    recalcLiquidacion();
+  }
+);
+
+setupUnitCombo(
+  document.getElementById('retiraSearch'),
+  document.getElementById('retiraList'),
+  document.getElementById('idRetira'),
+  () => {}
+);
+
+document.querySelectorAll('.ced-digits').forEach(inp => {
+  inp.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Home','End'];
+    if (allowed.includes(e.key)) return;
+    if (!/^\d$/.test(e.key) || (inp.value.length >= 10 && inp.selectionStart === inp.selectionEnd)) {
+      e.preventDefault();
+    }
+  });
+  inp.addEventListener('input', () => {
+    inp.value = inp.value.replace(/\D/g, '').slice(0, 10);
+  });
+});
+
+const placaInp = document.getElementById('placaVehiculo');
+if (placaInp) {
+  placaInp.addEventListener('input', () => {
+    if (placaInp.value.length > 8) placaInp.value = placaInp.value.slice(0, 8);
+  });
+}
+
+function onConceptoRowChange(sel) {
+  const container = sel.closest('div');
+  const inp = container.querySelector('.inp-concepto-row');
+  if (sel.value === '__OTRO__') {
+    inp.classList.remove('hidden');
+    inp.value = (inp.dataset.custom || '').trim();
+    inp.focus();
+  } else {
+    inp.classList.add('hidden');
+    inp.dataset.custom = inp.value;
+    inp.value = sel.value;
+  }
+}
+
+let pagoRowCount = 0;
+function addPagoRow(preset) {
+  pagoRowCount++;
+  const cont = document.getElementById('pagoRowsContainer');
+  const row = document.createElement('div');
+  row.className = 'pago-row';
+  const pid = preset && preset.id_pago ? preset.id_pago : '';
+  const rawConc = (preset && preset.concepto) ? String(preset.concepto).trim() : 'Pago unificado';
+  const isStd = (rawConc === 'Pago unificado' || rawConc === 'UNIFICADO_AMBOS');
+  const isAbono = (rawConc === 'Abono complementario' || rawConc === 'ABONO_COMPLEMENTARIO');
+  const selVal = isStd ? 'Pago unificado' : (isAbono ? 'Abono complementario' : '__OTRO__');
+  const initialCustom = (!isStd && !isAbono) ? rawConc : '';
+  const monto = preset && preset.monto ? Number(preset.monto).toFixed(2) : '';
+  const ref = preset && preset.ref ? preset.ref : '';
+  const fecha = preset && preset.fecha ? preset.fecha : '{{ edit_desp.fecha_despacho if edit_desp else hoy }}';
+
+  row.innerHTML = `
+    <input type="hidden" name="pago_id[]" value="${pid}">
+    <div style="min-width:185px;">
+      <label>Concepto</label>
+      <select class="sel-concepto-row" onchange="onConceptoRowChange(this)" style="margin-bottom:4px;">
+        <option value="Pago unificado" ${selVal==='Pago unificado'?'selected':''}>Pago unificado</option>
+        <option value="Abono complementario" ${selVal==='Abono complementario'?'selected':''}>Abono complementario</option>
+        <option value="__OTRO__" ${selVal==='__OTRO__'?'selected':''}>Otro (escribir concepto)...</option>
+      </select>
+      <input type="text" name="pago_concepto[]" class="inp-concepto-row ${selVal==='__OTRO__'?'':'hidden'}"
+             value="${rawConc}" data-custom="${initialCustom}" placeholder="Escriba el concepto" maxlength="100">
+    </div>
+    <div>
+      <label>Monto pagado (Bs.)</label>
+      <input type="number" step="0.01" min="0.01" name="pago_monto[]" class="pago-monto" value="${monto}" placeholder="0.00" oninput="recalcPagos()">
+    </div>
+    <div>
+      <label>N° Referencia</label>
+      <input type="text" name="pago_ref[]" class="pago-ref" inputmode="numeric" maxlength="12" value="${ref}" placeholder="">
+    </div>
+    <div>
+      <label>Fecha de pago</label>
+      <input type="date" name="pago_fecha[]" value="${fecha}">
+    </div>
+    <div>
+      ${pagoRowCount > 1 ? '<button type="button" class="btn btn-sm btn-danger" onclick="this.closest(\'.pago-row\').remove(); recalcPagos();">&times;</button>' : ''}
+    </div>
+  `;
+  const cInp = row.querySelector('.inp-concepto-row');
+  if (cInp) {
+    cInp.addEventListener('input', () => { cInp.dataset.custom = cInp.value; });
+  }
+  const refInp = row.querySelector('.pago-ref');
+  refInp.addEventListener('input', () => {
+    refInp.value = refInp.value.replace(/\D/g, '').slice(0, 12);
+  });
+  cont.appendChild(row);
+  if (typeof initNumericInputs === 'function') initNumericInputs();
+  recalcPagos();
+}
+
+function togglePanelPagos() {
+  const checked = document.getElementById('chkRecibo').checked;
+  const panel = document.getElementById('panelPagos');
+  panel.classList.toggle('hidden', !checked);
+  if (checked && document.querySelectorAll('.pago-row').length === 0) {
+    addPagoRow();
+  }
+  recalcPagos();
+}
+
+function getTotalDefinitivo() {
+  const f = Math.max(0, parseInt(document.getElementById('cantFam').value || '0', 10));
+  const t = Math.max(0, parseInt(document.getElementById('cantTan').value || '0', 10));
+  const subtotal = (f + t) * PRECIO;
+  return Math.round((subtotal - saldoAnteriorUnit) * 100) / 100;
+}
+
+function recalcLiquidacion() {
+  const f = Math.max(0, parseInt(document.getElementById('cantFam').value || '0', 10));
+  const t = Math.max(0, parseInt(document.getElementById('cantTan').value || '0', 10));
+  const tot = f + t;
+  const subtotal = Math.round(tot * PRECIO * 100) / 100;
+  const totalDef = Math.round((subtotal - saldoAnteriorUnit) * 100) / 100;
+
+  document.getElementById('liqBolsas').textContent = tot.toLocaleString('es-VE') + ' bolsas';
+  document.getElementById('liqSubtotal').textContent = fmtBs(subtotal);
+  const lbl = document.getElementById('liqSaldoLabel');
+  const valEl = document.getElementById('liqSaldoAnt');
+  if (saldoAnteriorUnit < -0.005) {
+    lbl.textContent = '(+) Deuda Anterior';
+    valEl.textContent = '+ ' + fmtBs(Math.abs(saldoAnteriorUnit));
+    valEl.style.color = '#b91c1c';
+  } else if (saldoAnteriorUnit > 0.005) {
+    lbl.textContent = '(-) Saldo a Favor';
+    valEl.textContent = '- ' + fmtBs(saldoAnteriorUnit);
+    valEl.style.color = '#1d4ed8';
+  } else {
+    lbl.textContent = 'Deuda Anterior / Saldo a Favor';
+    valEl.textContent = '0,00 Bs.';
+    valEl.style.color = '#1f2933';
+  }
+  document.getElementById('liqTotal').textContent = fmtBs(totalDef);
+  recalcPagos();
+}
+
+function recalcPagos() {
+  let pagado = 0;
+  if (document.getElementById('chkRecibo').checked) {
+    document.querySelectorAll('.pago-monto').forEach(inp => {
+      const v = parseFloat(inp.value || '0');
+      if (!isNaN(v) && v > 0) pagado += v;
+    });
+  }
+  pagado = Math.round(pagado * 100) / 100;
+  const adeudadoEl = document.getElementById('pagoTotalAdeudadoTxt');
+  if (adeudadoEl) adeudadoEl.textContent = fmtBs(getTotalDefinitivo());
+  document.getElementById('totalPagadoTxt').textContent = fmtBs(pagado);
+  updateDecisionUI(pagado);
+}
+
+function updateDecisionUI(pagadoVal) {
+  const btnGuardar = document.getElementById('btnGuardarDespacho');
+  const msgDec = document.getElementById('msgDecision');
+  const estadoLive = document.getElementById('estadoPagoLive');
+
+  btnGuardar.textContent = IS_EDIT ? 'Guardar Cambios' : 'Despachar';
+  btnGuardar.classList.remove('hidden');
+  btnGuardar.disabled = false;
+
+  if (tipoActual === 'EXTERNO_GALPON') {
+    msgDec.textContent = '';
+    return;
+  }
+
+  const pagado = typeof pagadoVal === 'number' ? pagadoVal : 0;
+  const neto = getTotalDefinitivo();
+  const tieneRecibo = document.getElementById('chkRecibo').checked;
+
+  if (!tieneRecibo) {
+    estadoLive.innerHTML = '<span class="badge b-warn">Sin recibo (pendiente de pago)</span>';
+    msgDec.textContent = neto > 0 ? ('Quedará registrado con saldo pendiente de ' + fmtBs(neto) + '.') : '';
+    return;
+  }
+
+  if (pagado + 0.005 >= neto) {
+    const excedente = Math.round((pagado - neto) * 100) / 100;
+    if (excedente > 0.005) {
+      estadoLive.innerHTML = '<span class="badge b-info">Excedente a favor: +' + fmtBs(excedente) + '</span>';
+      msgDec.textContent = 'El excedente se registrará como saldo a favor de la unidad.';
+    } else {
+      estadoLive.innerHTML = '<span class="badge b-ok">Pago completo</span>';
+      msgDec.textContent = '';
+    }
+  } else {
+    const falta = Math.round((neto - pagado) * 100) / 100;
+    estadoLive.innerHTML = '<span class="badge b-warn">Faltan ' + fmtBs(falta) + '</span>';
+    msgDec.textContent = 'Quedará registrado con saldo pendiente de ' + fmtBs(falta) + '.';
+  }
+}
+
+document.getElementById('formDespacho').addEventListener('submit', (e) => {
+  if (tipoActual === 'INTERNO_BATALLON') {
+    if (!document.getElementById('idBenef').value) {
+      e.preventDefault();
+      alert('Debe seleccionar una Unidad Beneficiaria válida de la lista predictiva.');
+      document.getElementById('benefSearch').focus();
+      return;
+    }
+    if (!document.getElementById('idRetira').value) {
+      e.preventDefault();
+      alert('Debe seleccionar una Unidad que Retira válida de la lista predictiva.');
+      document.getElementById('retiraSearch').focus();
+      return;
+    }
+    if (!document.getElementById('nomRetirante').value.trim()) {
+      e.preventDefault();
+      alert('El Nombre del retirante es obligatorio.');
+      document.getElementById('nomRetirante').focus();
+      return;
+    }
+    if (!/^\d{1,10}$/.test(document.getElementById('cedAutorizado').value.trim())) {
+      e.preventDefault();
+      alert('La Cédula del retirante es obligatoria (solo dígitos numéricos).');
+      document.getElementById('cedAutorizado').focus();
+      return;
+    }
+    if (document.getElementById('chkRecibo').checked) {
+      const rows = document.querySelectorAll('.pago-row');
+      for (const r of rows) {
+        const m = r.querySelector('.pago-monto').value.trim();
+        const ref = r.querySelector('.pago-ref').value.trim();
+        if (m || ref) {
+          if (!m || parseFloat(m) <= 0) {
+            e.preventDefault();
+            alert('Ingrese un monto válido en cada fila de pago.');
+            return;
+          }
+          if (!/^\d{4,12}$/.test(ref)) {
+            e.preventDefault();
+            alert('El número de referencia debe contener entre 4 y 12 dígitos numéricos.');
+            r.querySelector('.pago-ref').focus();
+            return;
+          }
+        }
+      }
+    }
+  } else {
+    if (!document.getElementById('selGalpon').value) {
+      e.preventDefault();
+      alert('Seleccione el Galpón destino.');
+      return;
+    }
+  }
+});
+
+if (IS_EDIT && tipoActual === 'INTERNO_BATALLON') {
+  showSaldoAlert(saldoAnteriorUnit);
+  if (EDIT_PAGOS.length > 0) {
+    EDIT_PAGOS.forEach(pg => addPagoRow(pg));
+  } else if (document.getElementById('chkRecibo').checked) {
+    addPagoRow();
+  }
+}
+recalcLiquidacion();
+</script>
+{% endblock %}

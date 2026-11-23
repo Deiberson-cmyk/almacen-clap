@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Genera schema.sql (con catálogo de unidades con código corto separado) desde Dis_unidad.xlsx.
-Uso: python tools/generar_sql.py"""
+"""Generador automático de schema.sql a partir de la plantilla tools/schema_base.sql
+y el catálogo maestro de unidades militares en Dis_unidad.xlsx.
+
+Uso:
+    python tools/generar_sql.py
+"""
 import os
 import re
 import openpyxl
@@ -13,14 +17,17 @@ ws2 = wb["SIN OFICIO"]
 
 
 def q(s):
+    """Escapa comillas y barras invertidas para generar literales SQL seguros."""
     return "'" + str(s).replace("\\", "\\\\").replace("'", "''") + "'"
 
 
 def norm(s):
+    """Normaliza espacios múltiples en una cadena."""
     return re.sub(r"\s+", " ", str(s)).strip()
 
 
 def split_codigo_nombre(raw):
+    """Separa el código corto numérico inicial del nombre de la unidad militar."""
     m = re.match(r"^(\d{2,4})\s*(.+)$", raw)
     if m:
         cod = m.group(1)
@@ -29,8 +36,11 @@ def split_codigo_nombre(raw):
     return None, raw
 
 
+# Sub-unidades que pertenecen jerárquicamente a la Unidad Agrupadora 35 POLICIA MILITAR
 PM_CHILD = {"3501", "3509", "351", "352", "353"}
-units = []  # [nombre_limpio, codigo, padre_cod, es_agrupador, agrupados, row]
+units = []  # [nombre_limpio, codigo, padre_cod, es_agrupador, agrupados, fila_excel]
+
+# Extraer unidades de la hoja CON OFICIO
 for r in range(3, 96):
     v = ws.cell(r, 2).value
     if v is None:
@@ -44,18 +54,21 @@ for r in range(3, 96):
     agrup = "Abarca: 35, 3501, 3509, 351, 352, 353" if es_agr else None
     units.append([nom, cod, None, es_agr, agrup, r])
 
+# Extraer unidades adicionales de la hoja SIN OFICIO
 for r in range(2, 6):
     raw = norm(ws2.cell(r, 2).value)
     cod, nom = split_codigo_nombre(raw)
     units.append([nom, cod, None, 0, None, -r])
 
+# Validar que no existan pares (codigo_unidad, nombre_unidad) duplicados
 pairs = [(u[1], u[0]) for u in units]
-assert len(pairs) == len(set(pairs)), "pares (codigo, nombre) duplicados"
+assert len(pairs) == len(set(pairs)), "Pares (codigo, nombre) duplicados en el Excel"
 
+# Leer plantilla base e inyectar primero las unidades padre/independientes y luego las sub-unidades
 base = open(os.path.join(BASE, "tools", "schema_base.sql"), encoding="utf-8").read()
 ins = [
     "-- ----------------------------------------------------------------------------",
-    "-- CATÁLOGO INICIAL DE UNIDADES (%d, extraídas de Dis_unidad.xlsx; código separado)" % len(units),
+    "-- CATÁLOGO INICIAL DE UNIDADES (%d unidades extraídas de Dis_unidad.xlsx)" % len(units),
     "-- ----------------------------------------------------------------------------",
 ]
 for u in units:
@@ -71,7 +84,8 @@ for u in units:
             % (q(u[1]), q(u[0]), q(u[2]))
         )
 
-open(os.path.join(BASE, "schema.sql"), "w", encoding="utf-8", newline="\n").write(
-    base.replace("-- @@UNIDADES@@", "\n".join(ins)) + "\n"
-)
-print("unidades:", len(units))
+out_path = os.path.join(BASE, "schema.sql")
+with open(out_path, "w", encoding="utf-8", newline="\n") as f:
+    f.write(base.replace("-- @@UNIDADES@@", "\n".join(ins)) + "\n")
+
+print("schema.sql regenerado correctamente con unidades:", len(units))

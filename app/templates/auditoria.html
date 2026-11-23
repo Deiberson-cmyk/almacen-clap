@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Auditoría y Accesos · Almacén CLAP{% endblock %}
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+    <h2 style="margin:0;">Bitácora de Auditoría y Registro de Accesos (Seguridad / MASTER)</h2>
+    {% if f_fecha or f_usuario or f_accion or sel_periodo == 'TODOS' %}
+      <span class="badge b-info">Filtros Activos</span>
+    {% endif %}
+  </div>
+
+  <form method="get" action="{{ url_for('auditoria') }}" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:12px; margin-top:4px;">
+    <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+      <div style="min-width:180px; flex:1;">
+        <label style="font-weight:600; font-size:12px; margin-bottom:4px; display:block;">Período</label>
+        <select name="periodo" style="width:100%;">
+          <option value="TODOS" {{ 'selected' if sel_periodo == 'TODOS' }}>Todos los períodos</option>
+          {% for p in periodos %}
+            <option value="{{ p.id_periodo }}" {{ 'selected' if sel_periodo != 'TODOS' and p.id_periodo == sel_periodo }}>
+              {{ p|periodo_fmt }} ({{ p.estado }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="min-width:150px; flex:1;">
+        <label style="font-weight:600; font-size:12px; margin-bottom:4px; display:block;">Filtrar por Fecha</label>
+        <input type="date" name="fecha" value="{{ f_fecha or '' }}" style="width:100%;">
+      </div>
+
+      <div style="min-width:160px; flex:1;">
+        <label style="font-weight:600; font-size:12px; margin-bottom:4px; display:block;">Filtrar por Usuario</label>
+        <select name="usuario" style="width:100%;">
+          <option value="">Todos los usuarios</option>
+          {% for u in lista_usuarios %}
+            <option value="{{ u.usuario }}" {{ 'selected' if f_usuario == u.usuario }}>
+              {{ u.usuario }} ({{ u.nombre_completo }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="min-width:180px; flex:1;">
+        <label style="font-weight:600; font-size:12px; margin-bottom:4px; display:block;">Filtrar por Acción / Evento</label>
+        <select name="accion" style="width:100%;">
+          <option value="">Todas las acciones y eventos</option>
+          <optgroup label="Auditoría / Operaciones">
+            <option value="ANULAR" {{ 'selected' if f_accion == 'ANULAR' }}>ANULAR (Anulaciones)</option>
+            <option value="EDITAR" {{ 'selected' if f_accion == 'EDITAR' }}>EDITAR (Modificaciones)</option>
+            <option value="CREAR" {{ 'selected' if f_accion == 'CREAR' }}>CREAR (Nuevos registros)</option>
+            <option value="CIERRE" {{ 'selected' if f_accion == 'CIERRE' }}>CIERRE (Cierres de período)</option>
+            <option value="CONFIG" {{ 'selected' if f_accion == 'CONFIG' }}>CONFIG (Configuración)</option>
+            <option value="AJUSTE" {{ 'selected' if f_accion == 'AJUSTE' }}>AJUSTE (Ajustes de saldo)</option>
+          </optgroup>
+          <optgroup label="Accesos / Seguridad">
+            <option value="LOGIN_OK" {{ 'selected' if f_accion == 'LOGIN_OK' }}>LOGIN EXITOSO</option>
+            <option value="LOGIN_FALLIDO" {{ 'selected' if f_accion == 'LOGIN_FALLIDO' }}>LOGIN FALLIDO</option>
+            <option value="LOGOUT" {{ 'selected' if f_accion == 'LOGOUT' }}>CIERRE DE SESIÓN</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div style="display:flex; gap:6px; align-items:center;">
+        <button type="submit" class="btn" style="height:38px;">Filtrar</button>
+        {% if f_fecha or f_usuario or f_accion or sel_periodo == 'TODOS' %}
+          <a href="{{ url_for('auditoria') }}" class="btn btn-sec" style="height:38px; display:inline-flex; align-items:center;">Limpiar</a>
+        {% endif %}
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Historial de Cambios, Ediciones y Anulaciones ({{ cambios|length }})</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Fecha / Hora</th><th>Usuario</th><th>Acción</th><th>Motivo</th><th>Anterior</th><th>Nuevo</th></tr>
+      </thead>
+      <tbody>
+        {% for c in cambios %}
+        <tr>
+          <td style="white-space:nowrap;">{{ c.fecha_hora|fecha_es }}</td>
+          <td><strong>{{ c.usuario }}</strong></td>
+          <td>
+            {% if c.accion == 'ANULAR' %}<span class="badge b-err">ANULAR</span>
+            {% elif c.accion == 'EDITAR' %}<span class="badge b-warn">EDITAR</span>
+            {% elif c.accion == 'CIERRE' %}<span class="badge b-info">CIERRE</span>
+            {% else %}<span class="badge b-ok">{{ c.accion }}</span>{% endif %}
+          </td>
+          <td>{{ c.motivo or '-' }}</td>
+          <td style="max-width:300px; font-size:12px;">{{ c.anterior_legible }}</td>
+          <td style="max-width:340px; font-size:12px;">{{ c.nuevo_legible }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">No se encontraron registros de auditoría con los filtros aplicados.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Registro de Últimos Accesos / Logins ({{ accesos|length }})</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Fecha / Hora</th><th>Usuario</th><th>Evento</th></tr></thead>
+      <tbody>
+        {% for a in accesos %}
+        <tr>
+          <td>{{ a.fecha_hora|fecha_es }}</td>
+          <td><strong>{{ a.usuario_intento }}</strong></td>
+          <td>
+            {% if a.evento == 'LOGIN_OK' %}<span class="badge b-ok">LOGIN EXITOSO</span>
+            {% elif a.evento == 'LOGIN_FALLIDO' %}<span class="badge b-err">LOGIN FALLIDO</span>
+            {% else %}<span class="badge b-muted">LOGOUT</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="muted">No se encontraron accesos registrados con los filtros aplicados.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

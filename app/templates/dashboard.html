@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Panel Principal · Almacén CLAP{% endblock %}
+{% block content %}
+
+<div class="grid grid-4" style="margin-bottom:14px;">
+  <div class="kpi green">
+    <div class="label">Stock Disponible en Almacén</div>
+    <div class="value">{{ stock.stock_disponible|int_es }} bolsas</div>
+    <div class="sub">Inicial: {{ stock.stock_inicial_arrastre|int_es }} + Entradas: {{ stock.entradas_periodo|int_es }}</div>
+  </div>
+  <div class="kpi blue">
+    <div class="label">Despachos Internos (Batallones)</div>
+    <div class="value">{{ stock.desp_internos_total|int_es }} bolsas</div>
+    <div class="sub">Familiar: {{ stock.desp_internos_familiar|int_es }} | Tango: {{ stock.desp_internos_tango|int_es }}</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Externos Nacionales + Colaboración</div>
+    <div class="value">{{ ((stock.desp_externos_total|int) + (stock.colaboraciones_descarga|int))|int_es }} bolsas</div>
+    <div class="sub">Galpones: {{ stock.desp_externos_total|int_es }} | Descarga: {{ stock.colaboraciones_descarga|int_es }}</div>
+  </div>
+  <div class="kpi warn">
+    <div class="label">Pagos Pendientes del Período</div>
+    <div class="value">{{ pendientes_pago }} unidad(es)</div>
+    <div class="sub">Período: {{ periodo|periodo_fmt }}</div>
+  </div>
+</div>
+
+<div class="grid grid-4" style="margin-bottom:16px;">
+  <div class="kpi">
+    <div class="label">Monto Total Esperado</div>
+    <div class="value">{{ rend.monto_esperado_bs|bs }}</div>
+  </div>
+  <div class="kpi green">
+    <div class="label">Monto Total Cobrado</div>
+    <div class="value">{{ rend.monto_cobrado_bs|bs }}</div>
+  </div>
+  <div class="kpi red">
+    <div class="label">Deudas Pendientes</div>
+    <div class="value">{{ rend.total_deudas_bs|bs }}</div>
+  </div>
+  <div class="kpi blue">
+    <div class="label">Saldos a Favor (Redondeos)</div>
+    <div class="value">{{ rend.total_saldos_favor_bs|bs }}</div>
+  </div>
+</div>
+
+{% if rol_actual == 'MASTER' %}
+<div class="card">
+  <h3>Configuración del Período Activo (Solo MASTER)</h3>
+  <p class="muted" style="margin-top:-6px;">
+    Período actual: <strong>{{ periodo|periodo_fmt }}</strong>
+  </p>
+  <form method="post" action="{{ url_for('configurar_periodo') }}" autocomplete="off">
+    <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom:10px;">
+      <div style="min-width:220px;">
+        <label>Período Activo</label>
+        <input type="text" value="{{ periodo|periodo_fmt }}" readonly>
+      </div>
+      <div class="field-compact">
+        <label>Precio Unitario (Bs.)</label>
+        <input type="number" step="0.01" min="0" name="precio_unitario_bolsa" class="input-compact" value="{{ "%.2f"|format(periodo.precio_unitario_bolsa) }}" required>
+      </div>
+      <div class="field-compact">
+        <label>Stock Inicial (Bolsas)</label>
+        {% if es_primer_periodo %}
+          <input type="number" step="1" min="0" name="stock_inicial_bolsas" class="input-compact" value="{{ periodo.stock_inicial_bolsas }}" required>
+        {% else %}
+          <input type="text" class="input-compact" value="{{ periodo.stock_inicial_bolsas|int_es }}" readonly>
+        {% endif %}
+      </div>
+    </div>
+    <button type="submit" class="btn">Guardar configuración del precio</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card" id="ultimos-despachos">
+  {% set labels_estado = {
+    'PAGADO': 'Pagados',
+    'SALDO_A_FAVOR': 'A Favor',
+    'PARCIAL': 'Deuda',
+    'PENDIENTE': 'Pendientes',
+    'ARRASTRADO': 'Arrastrados'
+  } %}
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+    <h3 style="margin:0;">
+      {% if filtro_estado == 'TODOS' %}
+        Últimos Despachos Internos del Período
+      {% else %}
+        Despachos Internos del Período — {{ labels_estado.get(filtro_estado, filtro_estado) }} ({{ resumen_filtro.cantidad }})
+      {% endif %}
+    </h3>
+    {% if filtro_estado != 'TODOS' %}
+      <a href="{{ url_for('dashboard') }}#ultimos-despachos" class="btn btn-sm btn-sec">Ver todos (últimos 10)</a>
+    {% endif %}
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th><th>Fecha</th><th>Batallón Beneficiario</th><th>Retiró</th>
+          <th class="num">Familiar</th><th class="num">Tango</th><th class="num">Total</th>
+          <th class="num">Neto</th><th class="num">Pagado</th>
+          {% if filtro_estado != 'TODOS' %}
+            <th>Detalle de Pagos / Retirante</th>
+          {% endif %}
+          <th>
+            <form method="get" action="{{ url_for('dashboard') }}#ultimos-despachos" class="inline-form">
+              <label for="filtroEstadoSel" style="display:inline; margin:0 6px 0 0; font-size:12.5px; color:var(--primary); font-weight:700;">Estado</label>
+              <select id="filtroEstadoSel" name="estado"
+                      onchange="window.location.href=(this.value==='TODOS'?'{{ url_for('dashboard') }}':'{{ url_for('dashboard') }}?estado='+encodeURIComponent(this.value))+'#ultimos-despachos'"
+                      style="width:auto; min-width:110px; padding:3px 6px; font-size:12px; font-weight:600; vertical-align:middle;">
+                <option value="TODOS" {{ 'selected' if filtro_estado == 'TODOS' }}>Todos</option>
+                <option value="PAGADO" {{ 'selected' if filtro_estado == 'PAGADO' }}>Pagado</option>
+                <option value="SALDO_A_FAVOR" {{ 'selected' if filtro_estado == 'SALDO_A_FAVOR' }}>A favor</option>
+                <option value="PARCIAL" {{ 'selected' if filtro_estado == 'PARCIAL' }}>Deuda</option>
+                <option value="PENDIENTE" {{ 'selected' if filtro_estado == 'PENDIENTE' }}>Pendiente</option>
+                <option value="ARRASTRADO" {{ 'selected' if filtro_estado == 'ARRASTRADO' }}>Arrastrado</option>
+              </select>
+            </form>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in ultimos_despachos %}
+        <tr>
+          <td><a href="{{ url_for('despacho_pagos', did=d.id_despacho) }}" style="color:var(--primary); text-decoration:none;"><strong>{{ d.codigo_movimiento }}</strong></a></td>
+          <td>{{ d.fecha_despacho|fecha_es }}</td>
+          <td>{{ d.batallon_beneficiario }}</td>
+          <td>{{ d.batallon_que_retiro or d.batallon_beneficiario }}</td>
+          <td class="num">{{ d.cantidad_familiar|int_es }}</td>
+          <td class="num">{{ d.cantidad_tango|int_es }}</td>
+          <td class="num"><strong>{{ d.total_bolsas|int_es }}</strong></td>
+          <td class="num">{{ d.monto_neto_exigible_bs|bs }}</td>
+          <td class="num">{{ d.monto_total_pagado_bs|bs }}</td>
+          {% if filtro_estado != 'TODOS' %}
+          <td>
+            {% if d.pagos_list %}
+              {% for pg in d.pagos_list %}
+                <div>
+                  Ref: <code>{{ pg.referencia_bancaria or 'S/REF' }}</code> · {{ pg.monto_pagado_bs|bs }}
+                  {% if pg.fecha_pago %}<small class="muted">({{ pg.fecha_pago|fecha_es }})</small>{% endif %}
+                  {% if pg.concepto_plan and pg.concepto_plan not in ('Pago unificado', 'UNIFICADO_AMBOS') %}
+                    <small class="muted">[{{ 'Abono complementario' if pg.concepto_plan == 'ABONO_COMPLEMENTARIO' else pg.concepto_plan }}]</small>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            {% else %}
+              <small class="muted">Sin pagos registrados</small>
+            {% endif %}
+            {% if d.nombre_autorizado_retiro %}
+              <div><small class="muted">Retirante: {{ d.nombre_autorizado_retiro }}{% if d.cedula_autorizado_retiro %} ({{ d.cedula_autorizado_retiro }}){% endif %}</small></div>
+            {% endif %}
+            {% if d.saldo_anterior_aplicado_bs and (d.saldo_anterior_aplicado_bs|float) != 0 %}
+              <div><small class="muted">Base: {{ d.monto_base_bs|bs }} | Saldo ant.: {{ d.saldo_anterior_aplicado_bs|bs }}</small></div>
+            {% endif %}
+            {% if d.observaciones %}
+              <div><small class="muted">Obs: {{ d.observaciones }}</small></div>
+            {% endif %}
+          </td>
+          {% endif %}
+          <td>
+            {% if d.saldo_arrastrado %}
+              {% if d.diferencia_saldo_bs > 0.005 %}
+                <span class="badge b-info">A FAVOR (+{{ d.diferencia_saldo_bs|bs }})</span>
+                <br><small class="muted" style="font-weight:600;">(Trasladado a post.)</small>
+              {% elif d.diferencia_saldo_bs < -0.005 %}
+                <span class="badge b-warn">DEUDA ({{ d.diferencia_saldo_bs|bs }})</span>
+                <br><small class="muted" style="font-weight:600;">(Arrastrada a post.)</small>
+              {% else %}
+                <span class="badge b-ok">PAGADO</span>
+                <br><small class="muted" style="font-weight:600;">(Solvente)</small>
+              {% endif %}
+            {% elif d.estado_financiero == 'PAGADO' %}<span class="badge b-ok">PAGADO</span>
+            {% elif d.estado_financiero == 'SALDO_A_FAVOR' %}<span class="badge b-info">A FAVOR (+{{ d.diferencia_saldo_bs|bs }})</span>
+            {% elif d.estado_financiero == 'PARCIAL' %}<span class="badge b-warn">DEUDA ({{ d.diferencia_saldo_bs|bs }})</span>
+            {% else %}<span class="badge b-err">PENDIENTE</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="{{ 11 if filtro_estado != 'TODOS' else 10 }}" class="muted">
+            {% if filtro_estado == 'TODOS' %}
+              Todavía no hay despachos registrados en este período.
+            {% else %}
+              No hay despachos internos en estado {{ labels_estado.get(filtro_estado, filtro_estado) }} en este período.
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% if filtro_estado != 'TODOS' and ultimos_despachos %}
+      <tfoot>
+        <tr style="background:#edf2ef; font-weight:700;">
+          <td colspan="4">TOTAL ({{ resumen_filtro.cantidad }} despacho{{ '' if resumen_filtro.cantidad == 1 else 's' }})</td>
+          <td class="num">{{ resumen_filtro.familiar|int_es }}</td>
+          <td class="num">{{ resumen_filtro.tango|int_es }}</td>
+          <td class="num">{{ resumen_filtro.total_bolsas|int_es }}</td>
+          <td class="num">{{ resumen_filtro.neto_bs|bs }}</td>
+          <td class="num">{{ resumen_filtro.pagado_bs|bs }}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endblock %}

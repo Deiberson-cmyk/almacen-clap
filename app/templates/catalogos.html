@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}Batallones y Galpones · Almacén CLAP{% endblock %}
+{% block content %}
+<div class="grid grid-2">
+  <div class="card">
+    <h2>Añadir Nueva Unidad / Batallón (Fuerte Tiuna)</h2>
+    <form method="post" action="{{ url_for('unidad_crear') }}" id="formUnidad" autocomplete="off">
+      <div class="form-row">
+        <div style="max-width:150px;">
+          <label>Código Corto</label>
+          <input type="text" name="codigo_unidad" id="codUnidadInp" class="auto-upper" placeholder="Ej: 3103">
+        </div>
+        <div style="grid-column: span 2;">
+          <label>Nombre de la Unidad (sin repetir el código adelante)</label>
+          <input type="text" name="nombre_unidad" id="nomUnidadInp" class="auto-upper" placeholder="Ej: COMPAÑÍA DE ABASTECIMIENTO Y TRANSPORTE" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Pertenece a Unidad Padre (Opcional)</label>
+          <div class="combo-wrap">
+            <input type="hidden" name="id_unidad_padre" id="idPadre">
+            <input type="text" name="unidad_padre_texto" id="padreSearch" placeholder="Escriba código o nombre" autocomplete="off">
+            <div class="combo-list" id="padreList"></div>
+          </div>
+        </div>
+        <div>
+          <label>Códigos que Abarca (Si es agrupador)</label>
+          <input type="text" name="codigos_agrupados_texto" class="auto-upper" placeholder="Ej: ABARCA: 35, 3501, 3509...">
+        </div>
+      </div>
+      <label style="display:flex; align-items:center; gap:6px; margin-bottom:10px; font-weight:500;">
+        <input type="checkbox" name="es_agrupador" value="1" style="width:auto;"> Es una Unidad Agrupadora (bloque con sub-unidades)
+      </label>
+      <button class="btn" type="submit">Añadir Unidad</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Añadir Galpón Externo (Interior del País)</h2>
+    <form method="post" action="{{ url_for('galpon_crear') }}" autocomplete="off">
+      <div class="form-row">
+        <div>
+          <label>Nombre del Galpón / Destino</label>
+          <input type="text" name="nombre_galpon" class="auto-upper" placeholder="Ej: GALPON CENTRAL MARACAY" required>
+        </div>
+        <div>
+          <label>Estado / Región</label>
+          <input type="text" name="estado_region" class="auto-upper" placeholder="Ej: ARAGUA" required>
+        </div>
+      </div>
+      <button class="btn" type="submit">Añadir Galpón Externo</button>
+    </form>
+
+    <h3 style="margin-top:18px;">Galpones Externos Registrados ({{ galpones|length }})</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Galpón</th><th>Estado</th><th>Estatus</th><th>Acción</th></tr></thead>
+        <tbody>
+          {% for g in galpones %}
+          <tr>
+            <td><strong>{{ g.nombre_galpon }}</strong></td>
+            <td>{{ g.estado_region or '-' }}</td>
+            <td>{% if g.activo %}<span class="badge b-ok">ACTIVO</span>{% else %}<span class="badge b-muted">INACTIVO</span>{% endif %}</td>
+            <td>
+              <form method="post" action="{{ url_for('galpon_toggle', gid=g.id_galpon) }}" class="inline-form">
+                <button class="btn btn-sm btn-sec" type="submit">{{ 'Desactivar' if g.activo else 'Activar' }}</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="muted">Aún no hay galpones externos registrados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+    <h3 style="margin:0;">Catálogo de Unidades / Batallones ({{ unidades|length }})</h3>
+    <input type="text" id="buscarUnidad" class="auto-upper" placeholder="Filtrar unidad por nombre o código..." oninput="filtrarUnidades()" style="max-width:300px;">
+  </div>
+  <div class="table-wrap">
+    <table id="tablaUnidades">
+      <thead>
+        <tr><th>Código Corto</th><th>Nombre de la Unidad</th><th>Agrupación / Padre</th><th class="num">Saldo Acumulado</th><th>Estado</th><th>Acciones</th></tr>
+      </thead>
+      <tbody>
+        {% for u in unidades %}
+        <tr>
+          <td><code>{{ u.codigo_unidad or '-' }}</code></td>
+          <td><strong>{{ u.nombre_unidad }}</strong></td>
+          <td>
+            {% if u.codigos_agrupados_texto %}<span class="badge b-info">{{ u.codigos_agrupados_texto }}</span>{% endif %}
+            {% if u.padre_nombre %}<small class="muted">Sub-unidad de: {{ u.padre_nombre }}</small>{% endif %}
+          </td>
+          <td class="num">
+            {% if u.saldo_acumulado_bs > 0.005 %}<span class="badge b-info">+{{ u.saldo_acumulado_bs|bs }} (A favor)</span>
+            {% elif u.saldo_acumulado_bs < -0.005 %}<span class="badge b-err">{{ u.saldo_acumulado_bs|bs }} (Deuda)</span>
+            {% else %}0,00 Bs.{% endif %}
+          </td>
+          <td>{% if u.activo %}<span class="badge b-ok">ACTIVA</span>{% else %}<span class="badge b-muted">INACTIVA</span>{% endif %}</td>
+          <td>
+            <div style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+              <details style="display:inline-block;">
+                <summary class="btn btn-sm btn-warn" style="list-style:none;">Editar</summary>
+                <form method="post" action="{{ url_for('unidad_editar', uid=u.id_unidad) }}" style="margin-top:6px; min-width:220px;" autocomplete="off">
+                  <input type="text" name="codigo_unidad" class="auto-upper" value="{{ u.codigo_unidad or '' }}" placeholder="Código corto" style="margin-bottom:4px;">
+                  <input type="text" name="nombre_unidad" class="auto-upper" value="{{ u.nombre_unidad }}" required style="margin-bottom:4px;">
+                  <input type="text" name="codigos_agrupados_texto" class="auto-upper" value="{{ u.codigos_agrupados_texto or '' }}" placeholder="Códigos agrupados" style="margin-bottom:4px;">
+                  <button class="btn btn-sm" type="submit">Guardar</button>
+                </form>
+              </details>
+              <form method="post" action="{{ url_for('unidad_toggle', uid=u.id_unidad) }}" class="inline-form">
+                <button class="btn btn-sm btn-sec" type="submit">{{ 'Desactivar' if u.activo else 'Activar' }}</button>
+              </form>
+              <form method="post" action="{{ url_for('unidad_eliminar', uid=u.id_unidad) }}" class="inline-form" onsubmit="return confirm('¿Confirma eliminar permanentemente {{ u.nombre_unidad }}?');">
+                <button class="btn btn-sm btn-danger" type="submit">Eliminar</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.auto-upper').forEach(inp => {
+  inp.addEventListener('input', () => {
+    const start = inp.selectionStart, end = inp.selectionEnd;
+    inp.value = inp.value.toUpperCase();
+    try { inp.setSelectionRange(start, end); } catch(e) {}
+  });
+});
+
+const UNIDADES_CAT = {{ unidades_json|tojson }};
+const padreInput = document.getElementById('padreSearch');
+const padreList = document.getElementById('padreList');
+const idPadre = document.getElementById('idPadre');
+
+function renderPadreMatches(q) {
+  const term = (q || '').trim().toLowerCase();
+  padreList.innerHTML = '';
+  if (!term) {
+    padreList.classList.remove('open');
+    return;
+  }
+  const matches = UNIDADES_CAT.filter(u => u.display.toLowerCase().includes(term)).slice(0, 20);
+  if (matches.length === 0) {
+    padreList.innerHTML = '<div class="combo-empty">Sin coincidencias</div>';
+  } else {
+    matches.forEach(u => {
+      const div = document.createElement('div');
+      div.className = 'combo-item';
+      div.textContent = u.display;
+      div.addEventListener('mousedown', (ev) => {
+        ev.preventDefault();
+        padreInput.value = u.display.toUpperCase();
+        idPadre.value = u.id;
+        padreList.classList.remove('open');
+      });
+      padreList.appendChild(div);
+    });
+  }
+  padreList.classList.add('open');
+}
+
+padreInput.addEventListener('input', () => {
+  padreInput.value = padreInput.value.toUpperCase();
+  idPadre.value = '';
+  renderPadreMatches(padreInput.value);
+});
+padreInput.addEventListener('blur', () => {
+  setTimeout(() => padreList.classList.remove('open'), 150);
+});
+
+document.getElementById('formUnidad').addEventListener('submit', (e) => {
+  if (padreInput.value.trim() && !idPadre.value) {
+    e.preventDefault();
+    alert('Seleccione la Unidad Padre desde las sugerencias o deje el campo vacío.');
+    padreInput.focus();
+  }
+});
+
+function filtrarUnidades() {
+  const q = document.getElementById('buscarUnidad').value.toLowerCase();
+  document.querySelectorAll('#tablaUnidades tbody tr').forEach(tr => {
+    tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{% block title %}Pagos de {{ desp.codigo_movimiento }} · Almacén CLAP{% endblock %}
+{% block content %}
+<div style="margin-bottom:10px;">
+  <a href="{{ url_for('despachos') }}" class="btn btn-sm btn-sec">&larr; Volver a Despachos y Pagos</a>
+</div>
+
+<div class="card">
+  <h2>Conciliación de Pagos · {{ desp.codigo_movimiento }}</h2>
+
+  {% if desp.saldo_arrastrado %}
+    {% if desp.diferencia_saldo_bs > 0.005 %}
+      <div style="background:#eff6ff; border:1px solid #bfdbfe; border-left:6px solid #2563eb; border-radius:6px; padding:12px 16px; margin:12px 0;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <strong style="color:#1e40af; font-size:1.05rem;">ℹ️ Saldo a Favor Arrastrado: +{{ desp.diferencia_saldo_bs|bs }}</strong>
+          <span class="badge b-info">EXCEDENTE TRASLADADO</span>
+        </div>
+        <div style="color:#1e3a8a; margin-top:6px; font-size:0.95rem; line-height:1.4;">
+          El batallón <strong>pagó completo con excedente</strong> en este despacho: debía pagar <strong>{{ desp.monto_neto_exigible_bs|bs }}</strong> y pagó un total de <strong>{{ desp.monto_total_pagado_bs|bs }}</strong>.
+          <br>
+          El saldo a favor sobrante de <strong>+{{ desp.diferencia_saldo_bs|bs }}</strong> fue 
+          {% if desp_destino_arrastre %}
+            trasladado y aplicado a favor en el despacho posterior <a href="{{ url_for('despacho_pagos', did=desp_destino_arrastre.id_despacho) }}" style="color:#1d4ed8; font-weight:700; text-decoration:underline;">{{ desp_destino_arrastre.codigo_movimiento }}</a> ({{ desp_destino_arrastre.fecha_despacho|fecha_es }}) para descontar su total a pagar.
+          {% else %}
+            trasladado a despacho posterior / consolidado al cierre.
+          {% endif %}
+        </div>
+      </div>
+    {% elif desp.diferencia_saldo_bs < -0.005 %}
+      <div style="background:#fef2f2; border:1px solid #fecaca; border-left:6px solid #dc2626; border-radius:6px; padding:12px 16px; margin:12px 0;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <strong style="color:#991b1b; font-size:1.05rem;">⚠️ Deuda Pendiente Arrastrada: {{ desp.diferencia_saldo_bs|bs }}</strong>
+          <span class="badge b-warn">DEUDA ARRASTRADA</span>
+        </div>
+        <div style="color:#7f1d1d; margin-top:6px; font-size:0.95rem; line-height:1.4;">
+          El batallón <strong>no pagó completo</strong> en este despacho: debía pagar <strong>{{ desp.monto_neto_exigible_bs|bs }}</strong> y solo pagó <strong>{{ desp.monto_total_pagado_bs|bs }}</strong> (quedó debiendo <strong>{{ desp.diferencia_saldo_bs|bs }}</strong>).
+          <br>
+          Esta deuda pendiente fue 
+          {% if desp_destino_arrastre %}
+            sumada y arrastrada al despacho posterior <a href="{{ url_for('despacho_pagos', did=desp_destino_arrastre.id_despacho) }}" style="color:#b91c1c; font-weight:700; text-decoration:underline;">{{ desp_destino_arrastre.codigo_movimiento }}</a> ({{ desp_destino_arrastre.fecha_despacho|fecha_es }}).
+          {% else %}
+            arrastrada a despacho posterior / consolidada al cierre del período.
+          {% endif %}
+        </div>
+      </div>
+    {% else %}
+      <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-left:6px solid #16a34a; border-radius:6px; padding:12px 16px; margin:12px 0;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <strong style="color:#166534; font-size:1.05rem;">✅ Despacho Solvente (Pago Exacto)</strong>
+          <span class="badge b-ok">SOLVENTE</span>
+        </div>
+        <div style="color:#14532d; margin-top:6px; font-size:0.95rem; line-height:1.4;">
+          El batallón pagó el monto exacto (Total exigible: <strong>{{ desp.monto_neto_exigible_bs|bs }}</strong> = Total pagado: <strong>{{ desp.monto_total_pagado_bs|bs }}</strong>).
+          Cerró el período con saldo <strong>0,00 Bs.</strong> (sin deudas ni saldos a favor pendientes).
+        </div>
+      </div>
+    {% endif %}
+  {% endif %}
+
+  {% if desp.saldo_anterior_aplicado_bs and (desp.saldo_anterior_aplicado_bs|float|abs) > 0.005 %}
+    {% if desp.saldo_anterior_aplicado_bs|float > 0.005 %}
+      <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-left:6px solid #16a34a; border-radius:6px; padding:10px 14px; margin:10px 0;">
+        <strong style="color:#166534;">💳 Saldo a Favor Previo Acreditado: -{{ desp.saldo_anterior_aplicado_bs|bs }}</strong>
+        <div style="color:#14532d; font-size:0.9rem; margin-top:4px;">
+          A este despacho se le aplicó un saldo a favor que el batallón traía 
+          {% if desp_origen_arrastre %}
+            del despacho anterior <a href="{{ url_for('despacho_pagos', did=desp_origen_arrastre.id_despacho) }}" style="color:#15803d; font-weight:700; text-decoration:underline;">{{ desp_origen_arrastre.codigo_movimiento }}</a> ({{ desp_origen_arrastre.fecha_despacho|fecha_es }})
+          {% endif %}, reduciendo el total exigible de {{ desp.monto_base_bs|bs }} a {{ desp.monto_neto_exigible_bs|bs }}.
+        </div>
+      </div>
+    {% elif desp.saldo_anterior_aplicado_bs|float < -0.005 %}
+      <div style="background:#fffbeb; border:1px solid #fde68a; border-left:6px solid #d97706; border-radius:6px; padding:10px 14px; margin:10px 0;">
+        <strong style="color:#92400e;">⚠️ Deuda Previa Cargada: +{{ (desp.saldo_anterior_aplicado_bs|float|abs)|bs }}</strong>
+        <div style="color:#78350f; font-size:0.9rem; margin-top:4px;">
+          A este despacho se le sumó una deuda pendiente 
+          {% if desp_origen_arrastre %}
+            del despacho anterior <a href="{{ url_for('despacho_pagos', did=desp_origen_arrastre.id_despacho) }}" style="color:#b45309; font-weight:700; text-decoration:underline;">{{ desp_origen_arrastre.codigo_movimiento }}</a> ({{ desp_origen_arrastre.fecha_despacho|fecha_es }})
+          {% endif %}, aumentando el total exigible de {{ desp.monto_base_bs|bs }} a {{ desp.monto_neto_exigible_bs|bs }}.
+        </div>
+      </div>
+    {% endif %}
+  {% endif %}
+  <div class="grid grid-4" style="margin-top:10px;">
+    <div class="kpi">
+      <div class="label">Batallón Beneficiario</div>
+      <div style="font-weight:700; margin-top:4px;">{{ desp.benef_nombre }}</div>
+      <div class="sub">Retiró: {{ desp.retira_nombre or desp.benef_nombre }}</div>
+    </div>
+    <div class="kpi blue">
+      <div class="label">Asignación de Bolsas</div>
+      <div class="value">{{ desp.total_bolsas|int_es }} bolsas</div>
+      <div class="sub">Familiar: {{ desp.cantidad_familiar|int_es }} | Tango: {{ desp.cantidad_tango|int_es }} ({{ desp.precio_unitario_aplicado|bs }}/u)</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Total Definitivo a Pagar</div>
+      <div class="value">{{ desp.monto_neto_exigible_bs|bs }}</div>
+      {% if desp.saldo_anterior_aplicado_bs and (desp.saldo_anterior_aplicado_bs|float|abs) > 0.005 %}
+        <div class="sub">Subtotal: {{ desp.monto_base_bs|bs }} | Saldo ant.: {{ desp.saldo_anterior_aplicado_bs|bs }}</div>
+      {% endif %}
+    </div>
+    <div class="kpi {{ 'green' if desp.diferencia_saldo_bs >= -0.005 else 'red' }}">
+      <div class="label">Total Pagado / Conciliación</div>
+      <div class="value">{{ desp.monto_total_pagado_bs|bs }}</div>
+      <div class="sub">
+        {% if desp.saldo_arrastrado %}
+          {% if desp.diferencia_saldo_bs > 0.005 %}
+            <strong style="color:#1d4ed8;">Saldo a Favor: +{{ desp.diferencia_saldo_bs|bs }}</strong>
+            <br>
+            <span class="muted">
+              (Pago completo con excedente
+              {% if desp_destino_arrastre %}
+                · Trasladado a <a href="{{ url_for('despacho_pagos', did=desp_destino_arrastre.id_despacho) }}" style="color:var(--primary); font-weight:700;">{{ desp_destino_arrastre.codigo_movimiento }}</a>
+              {% else %}
+                · Consolidado en cierre/posterior
+              {% endif %})
+            </span>
+          {% elif desp.diferencia_saldo_bs < -0.005 %}
+            <strong style="color:#b91c1c;">Deuda Faltante: {{ desp.diferencia_saldo_bs|bs }}</strong>
+            <br>
+            <span class="muted">
+              (Pago incompleto
+              {% if desp_destino_arrastre %}
+                · Deuda arrastrada a <a href="{{ url_for('despacho_pagos', did=desp_destino_arrastre.id_despacho) }}" style="color:var(--primary); font-weight:700;">{{ desp_destino_arrastre.codigo_movimiento }}</a>
+              {% else %}
+                · Arrastrada a despacho posterior / cierre
+              {% endif %})
+            </span>
+          {% else %}
+            <strong style="color:#15803d;">Pago Exacto (Solvente)</strong> · Consolidado
+          {% endif %}
+        {% else %}
+          {% if desp.diferencia_saldo_bs > 0.005 %}
+            <strong style="color:#1d4ed8;">Saldo a Favor: +{{ desp.diferencia_saldo_bs|bs }}</strong> (Pendiente por aplicar)
+          {% elif desp.diferencia_saldo_bs < -0.005 %}
+            <strong style="color:#b91c1c;">Faltante / Deuda: {{ desp.diferencia_saldo_bs|bs }}</strong>
+          {% else %}
+            <strong style="color:#15803d;">Pago Exacto (Solvente)</strong>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if not desp.anulado and es_periodo_activo %}
+<div class="card">
+  <h3>Registrar Nuevo Pago / Abono</h3>
+  <form method="post" action="{{ url_for('pago_crear', did=desp.id_despacho) }}" autocomplete="off">
+    <input type="hidden" name="obs_key" class="obs-key" value="">
+    <div class="form-row">
+      <div style="min-width:185px;">
+        <label>Concepto del Pago</label>
+        <select id="selNuevoConcepto" onchange="onNuevoConceptoChange(this)" style="margin-bottom:4px;">
+          <option value="Pago unificado" selected>Pago unificado</option>
+          <option value="Abono complementario">Abono complementario</option>
+          <option value="__OTRO__">Otro (escribir concepto)...</option>
+        </select>
+        <input type="text" id="inpNuevoConcepto" name="concepto_plan" value="Pago unificado" class="hidden" placeholder="Escriba el concepto" maxlength="100">
+      </div>
+      <div>
+        <label>Monto Pagado (Bs.)</label>
+        <input type="number" step="0.01" min="0.01" name="monto_pagado_bs" placeholder="0.00" required>
+      </div>
+      <div>
+        <label>Referencia Bancaria</label>
+        <input type="text" name="referencia_bancaria" class="ref-digits" inputmode="numeric" maxlength="12" minlength="4" pattern="\d{4,12}" placeholder="" required>
+      </div>
+      <div>
+        <label>Fecha del Pago</label>
+        <input type="date" name="fecha_pago" value="{{ hoy }}" required>
+      </div>
+      <div>
+        <label>Observaciones (Opcional)</label>
+        <input type="text" class="obs-input" autocomplete="new-password" placeholder="">
+      </div>
+    </div>
+    <button type="submit" class="btn">Agregar Pago / Abono</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h3>Historial de Pagos Registrados para {{ desp.codigo_movimiento }}</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Concepto</th><th class="num">Monto</th><th>Referencia</th><th>Fecha Pago</th><th>Usuario</th><th>Estado</th><th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pagos %}
+        <tr class="{{ 'anulado' if p.anulado }}">
+          <td>
+            {% if p.concepto_plan in ('ABONO_COMPLEMENTARIO', 'Abono complementario') %}
+              Abono complementario
+            {% elif p.concepto_plan in ('UNIFICADO_AMBOS', 'Pago unificado') %}
+              Pago unificado
+            {% else %}
+              <strong>{{ p.concepto_plan }}</strong>
+            {% endif %}
+          </td>
+          <td class="num"><strong>{{ p.monto_pagado_bs|bs }}</strong></td>
+          <td><code>{{ p.referencia_bancaria or 'S/REF' }}</code></td>
+          <td>{{ p.fecha_pago|fecha_es }}</td>
+          <td>{{ p.usuario }}</td>
+          <td>{% if p.anulado %}<span class="badge b-err">ANULADO</span>{% else %}<span class="badge b-ok">ACTIVO</span>{% endif %}</td>
+          <td>
+            {% if not p.anulado and not desp.anulado and es_periodo_activo %}
+            <details>
+              <summary>Editar</summary>
+              <form method="post" action="{{ url_for('pago_editar', pid=p.id_pago) }}" style="margin-top:6px; min-width:210px;" autocomplete="off">
+                <input type="hidden" name="id_despacho" value="{{ desp.id_despacho }}">
+                {% set is_std = p.concepto_plan in ('UNIFICADO_AMBOS', 'Pago unificado') %}
+                {% set is_abono = p.concepto_plan in ('ABONO_COMPLEMENTARIO', 'Abono complementario') %}
+                {% set sel_c = 'Pago unificado' if is_std else ('Abono complementario' if is_abono else '__OTRO__') %}
+                {% set initial_custom = '' if (is_std or is_abono) else p.concepto_plan %}
+                <select class="sel-edit-concepto" onchange="onEditConceptoChange(this)" style="margin-bottom:4px;">
+                  <option value="Pago unificado" {{ 'selected' if sel_c == 'Pago unificado' }}>Pago unificado</option>
+                  <option value="Abono complementario" {{ 'selected' if sel_c == 'Abono complementario' }}>Abono complementario</option>
+                  <option value="__OTRO__" {{ 'selected' if sel_c == '__OTRO__' }}>Otro (escribir concepto)...</option>
+                </select>
+                <input type="text" name="concepto_plan" class="inp-edit-concepto {{ 'hidden' if sel_c != '__OTRO__' }}"
+                       value="{{ p.concepto_plan }}" data-custom="{{ initial_custom }}" placeholder="Escriba el concepto" maxlength="100" style="margin-bottom:4px;">
+                <input type="number" step="0.01" name="monto_pagado_bs" value="{{ "%.2f"|format(p.monto_pagado_bs) }}" required style="margin-bottom:4px;">
+                <input type="text" name="referencia_bancaria" class="ref-digits" inputmode="numeric" maxlength="12" minlength="4" pattern="\d{4,12}" value="{{ p.referencia_bancaria or '' }}" placeholder="" required style="margin-bottom:4px;">
+                <input type="date" name="fecha_pago" value="{{ p.fecha_pago or '' }}" style="margin-bottom:4px;">
+                <input type="text" name="motivo" placeholder="Motivo obligatorio" required style="margin-bottom:4px;">
+                <button class="btn btn-sm btn-warn" type="submit">Guardar</button>
+              </form>
+            </details>
+            {% if rol_actual == 'MASTER' %}
+            <details style="margin-top:4px;">
+              <summary style="color:#b91c1c;">Anular (MASTER)</summary>
+              <form method="post" action="{{ url_for('pago_anular', pid=p.id_pago) }}" class="form-anular" style="margin-top:6px; min-width:210px;" autocomplete="off">
+                <input type="hidden" name="id_despacho" value="{{ desp.id_despacho }}">
+                <input type="text" name="motivo" placeholder="Motivo de anulación" required style="margin-bottom:4px;">
+                {% if not es_soporte %}
+                <input type="password" name="pin_confirmacion" class="pin-9" inputmode="numeric" maxlength="9"
+                       autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"
+                       placeholder="Código de seguridad" required style="margin-bottom:4px;">
+                {% endif %}
+                <button class="btn btn-sm btn-danger" type="submit">Confirmar anulación</button>
+              </form>
+            </details>
+            {% endif %}
+            {% elif not es_periodo_activo %}
+              <span class="muted">Período cerrado</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="muted">Sin pagos registrados aún para este despacho.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function onNuevoConceptoChange(sel) {
+  const inp = document.getElementById('inpNuevoConcepto');
+  if (sel.value === '__OTRO__') {
+    inp.classList.remove('hidden');
+    inp.value = (inp.dataset.custom || '').trim();
+    inp.focus();
+  } else {
+    inp.classList.add('hidden');
+    inp.dataset.custom = inp.value;
+    inp.value = sel.value;
+  }
+}
+const nInp = document.getElementById('inpNuevoConcepto');
+if (nInp) {
+  nInp.addEventListener('input', () => { nInp.dataset.custom = nInp.value; });
+}
+
+function onEditConceptoChange(sel) {
+  const form = sel.closest('form');
+  const inp = form.querySelector('.inp-edit-concepto');
+  if (sel.value === '__OTRO__') {
+    inp.classList.remove('hidden');
+    inp.value = (inp.dataset.custom || '').trim();
+    inp.focus();
+  } else {
+    inp.classList.add('hidden');
+    inp.dataset.custom = inp.value;
+    inp.value = sel.value;
+  }
+}
+document.querySelectorAll('.inp-edit-concepto').forEach(inp => {
+  inp.addEventListener('input', () => { inp.dataset.custom = inp.value; });
+});
+
+document.querySelectorAll('.ref-digits').forEach(inp => {
+  inp.addEventListener('input', () => {
+    inp.value = inp.value.replace(/\D/g, '').slice(0, 12);
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Usuarios · Almacén CLAP{% endblock %}
+{% block content %}
+
+<!-- Seguridad y Datos del Usuario Master -->
+{% if master_u %}
+<div class="card">
+  <h2>Seguridad del Usuario Master</h2>
+  <div class="grid grid-2">
+    <div style="border:1px solid #dce1e5; border-radius:6px; padding:12px;">
+      <h3 style="margin-top:0;">Código de Seguridad</h3>
+      {% if es_soporte %}
+        <form method="post" action="{{ url_for('master_pin_guardar') }}" autocomplete="off">
+          <div style="margin-bottom:8px;">
+            <label>Código actual visible</label>
+            <input type="text" name="pin_seguridad" class="pin-9" inputmode="numeric" maxlength="9"
+                   value="{{ master_u.pin_seguridad or '' }}">
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-sm" type="submit" name="accion_pin" value="guardar">Guardar código</button>
+            <button class="btn btn-sm btn-danger" type="submit" name="accion_pin" value="reset">Resetear código</button>
+          </div>
+        </form>
+      {% elif not master_u.pin_seguridad %}
+        <form method="post" action="{{ url_for('master_pin_guardar') }}" id="formPinMaster" autocomplete="off">
+          <div style="margin-bottom:8px;">
+            <input type="text" name="pin_seguridad" id="pinCrearMaster" class="pin-9" inputmode="numeric" maxlength="9" required>
+          </div>
+          <button class="btn btn-sm" type="submit">Guardar código</button>
+        </form>
+      {% else %}
+        <div class="flash info" style="margin:0;">
+          Código de seguridad configurado y bloqueado.
+        </div>
+      {% endif %}
+    </div>
+
+    <div style="border:1px solid #dce1e5; border-radius:6px; padding:12px;">
+      <h3 style="margin-top:0;">Cambiar Contraseña / Nombre del Master</h3>
+      <form method="post" action="{{ url_for('master_actualizar') }}" id="formMasterActualizar" autocomplete="off">
+        <div style="margin-bottom:8px;">
+          <label>Nombre completo</label>
+          <input type="text" name="nombre_completo" class="only-letters" value="{{ master_u.nombre_completo }}" placeholder="Nombre + Apellido" required>
+        </div>
+        <div style="margin-bottom:8px;">
+          <label>Nueva contraseña (opcional)</label>
+          <input type="password" name="clave" id="masterNuevaClave" autocomplete="new-password" placeholder="Mayúscula inicial + mín. 2 números">
+        </div>
+        {% if not es_soporte %}
+        <div style="margin-bottom:8px;">
+          <label>Código de seguridad para autorizar</label>
+          <input type="password" name="pin_confirmacion" class="pin-9" inputmode="numeric" maxlength="9" autocomplete="new-password" required>
+        </div>
+        {% endif %}
+        <button class="btn btn-sm btn-warn" type="submit">Actualizar Master</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Gestión de Usuarios Operadores</h2>
+  {% if usuarios|length < 4 %}
+  <form method="post" action="{{ url_for('usuario_crear') }}" id="formCrearUsuario" autocomplete="off">
+    <div class="form-row">
+      <div>
+        <label>Usuario de Acceso</label>
+        <input type="text" name="usuario" placeholder="Ej: operador1" required>
+      </div>
+      <div>
+        <label>Nombre completo</label>
+        <input type="text" name="nombre_completo" id="nombreCompletoCrear" class="only-letters" placeholder="Nombre + Apellido" required>
+      </div>
+      <div>
+        <label>Contraseña Inicial</label>
+        <input type="password" name="clave" id="claveCrear" autocomplete="new-password" placeholder="Mayúscula inicial + mín. 2 números" required>
+      </div>
+    </div>
+    <button class="btn" type="submit">Crear Operador</button>
+  </form>
+  {% else %}
+    <div class="flash warn">Se completó el equipo de operadores permitido. Puede editar o desactivar cuentas existentes abajo.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Usuarios Registrados</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Usuario</th><th>Nombre completo</th><th>Rol</th><th>Último Acceso</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr>
+          <td><strong>{{ u.usuario }}</strong></td>
+          <td>{{ u.nombre_completo }}</td>
+          <td><span class="badge {{ 'b-info' if u.rol=='MASTER' else 'b-muted' }}">{{ u.rol }}</span></td>
+          <td>{{ u.ultimo_acceso|fecha_es if u.ultimo_acceso else 'Nunca' }}</td>
+          <td>{% if u.activo %}<span class="badge b-ok">ACTIVO</span>{% else %}<span class="badge b-err">INACTIVO</span>{% endif %}</td>
+          <td>
+            {% if u.rol != 'MASTER' %}
+            <details style="display:inline-block;">
+              <summary>Editar / Clave</summary>
+              <form method="post" action="{{ url_for('usuario_editar', uid=u.id_usuario) }}" class="form-edit-user" style="margin-top:6px;" autocomplete="off">
+                <input type="text" name="nombre_completo" class="inp-fullname only-letters" value="{{ u.nombre_completo }}" placeholder="Nombre + Apellido" required style="margin-bottom:4px;">
+                <input type="password" name="clave" class="inp-pass-opt" autocomplete="new-password" placeholder="Nueva clave (opcional)" style="margin-bottom:4px;">
+                <button class="btn btn-sm btn-warn" type="submit">Guardar</button>
+              </form>
+            </details>
+            <form method="post" action="{{ url_for('usuario_toggle', uid=u.id_usuario) }}" class="inline-form" style="margin-left:6px;">
+              <button class="btn btn-sm btn-sec" type="submit">{{ 'Desactivar' if u.activo else 'Activar' }}</button>
+            </form>
+            {% else %}
+              <span class="muted">Gestionado arriba</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const SEQ_TRIV = ['0123','1234','2345','3456','4567','5678','6789','9876','8765','7654','6543','5432','4321','3210','abcd','bcde','cdef','qwer','asdf','zxcv'];
+
+// Bloqueo en tiempo real de números y caracteres especiales en Nombre completo
+document.querySelectorAll('.only-letters').forEach(inp => {
+  inp.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key.length === 1 && !/^[A-Za-zÁÉÍÓÚáéíóúÑñÜü\s]$/.test(e.key)) {
+      e.preventDefault();
+    }
+  });
+  inp.addEventListener('input', () => {
+    inp.value = inp.value.replace(/[^A-Za-zÁÉÍÓÚáéíóúÑñÜü\s]/g, '');
+  });
+});
+
+// Nota: los campos .pin-9 se validan globalmente mediante initPinInputs() en base.html.
+function validarNombre(nom) {
+  return /^[A-Za-zÁÉÍÓÚáéíóúÑñÜü\s]{2,}$/.test(nom.trim());
+}
+
+function validarClave(pw) {
+  if (!pw || pw.length < 4) return 'La contraseña debe tener al menos 4 caracteres.';
+  if (!/^[A-ZÁÉÍÓÚÑ]/.test(pw)) return 'La contraseña debe iniciar con una letra mayúscula.';
+  const nums = (pw.match(/\d/g) || []).length;
+  if (nums < 2) return 'La contraseña debe contener al menos dos (2) números.';
+  if (/(.)\1\1/.test(pw)) return 'La contraseña no puede contener caracteres repetidos consecutivos (ej. 0000, 1111, 2222).';
+  const low = pw.toLowerCase();
+  for (const s of SEQ_TRIV) {
+    if (low.includes(s)) return 'La contraseña no puede contener secuencias triviales (' + s + ').';
+  }
+  return null;
+}
+
+const fPin = document.getElementById('formPinMaster');
+if (fPin) {
+  fPin.addEventListener('submit', (e) => {
+    const pin = document.getElementById('pinCrearMaster').value.trim();
+    if (!/^\d{1,9}$/.test(pin)) {
+      e.preventDefault();
+      alert('El código de seguridad debe tener entre 1 y 9 dígitos numéricos.');
+    }
+  });
+}
+
+const fMasterAct = document.getElementById('formMasterActualizar');
+if (fMasterAct) {
+  fMasterAct.addEventListener('submit', (e) => {
+    const pw = document.getElementById('masterNuevaClave').value;
+    if (pw) {
+      const errPw = validarClave(pw);
+      if (errPw) {
+        e.preventDefault();
+        alert(errPw);
+      }
+    }
+  });
+}
+
+const fCrear = document.getElementById('formCrearUsuario');
+if (fCrear) {
+  fCrear.addEventListener('submit', (e) => {
+    const nom = document.getElementById('nombreCompletoCrear').value;
+    const pw = document.getElementById('claveCrear').value;
+    if (!validarNombre(nom)) {
+      e.preventDefault();
+      alert('El nombre completo solo debe contener letras y espacios.');
+      return;
+    }
+    const errPw = validarClave(pw);
+    if (errPw) {
+      e.preventDefault();
+      alert(errPw);
+    }
+  });
+}
+
+document.querySelectorAll('.form-edit-user').forEach(f => {
+  f.addEventListener('submit', (e) => {
+    const nom = f.querySelector('.inp-fullname').value;
+    const pw = f.querySelector('.inp-pass-opt').value;
+    if (!validarNombre(nom)) {
+      e.preventDefault();
+      alert('El nombre completo solo debe contener letras y espacios.');
+      return;
+    }
+    if (pw) {
+      const errPw = validarClave(pw);
+      if (errPw) {
+        e.preventDefault();
+        alert(errPw);
+      }
+    }
+  });
+});
+</script>
+{% endblock %}

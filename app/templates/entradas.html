@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Entradas de Lote · Almacén CLAP{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Registrar Entrada de Lote de Bolsas</h2>
+  <p class="muted" style="margin-top:-6px;">Control operativo interno</p>
+  <form method="post" action="{{ url_for('entradas_crear') }}" autocomplete="off">
+    <input type="hidden" name="obs_key" class="obs-key" value="">
+    <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom:10px;">
+      <div class="field-compact">
+        <label>Fecha de Recepción</label>
+        <input type="date" name="fecha_recepcion" value="{{ hoy }}" required>
+      </div>
+      <div class="field-compact">
+        <label>Cantidad de Bolsas</label>
+        <input type="number" name="cantidad_bolsas" class="input-compact" min="1" placeholder="" required>
+      </div>
+      <div style="flex:1; min-width:240px;">
+        <label>Observaciones</label>
+        <input type="text" class="obs-input" autocomplete="new-password" placeholder="">
+      </div>
+    </div>
+    <button type="submit" class="btn">Registrar Entrada</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Entradas de Lote del Período Activo</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th><th>Fecha</th><th class="num">Cantidad</th><th>Observaciones</th><th>Usuario</th><th>Estado</th><th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entradas %}
+        <tr class="{{ 'anulado' if e.anulado }}">
+          <td><strong>{{ e.codigo_movimiento }}</strong></td>
+          <td>{{ e.fecha_recepcion|fecha_es }}</td>
+          <td class="num"><strong>{{ e.cantidad_bolsas|int_es }}</strong></td>
+          <td>{{ e.observaciones or '-' }}{% if e.motivo_anulacion %}<br><small class="muted">Anulado: {{ e.motivo_anulacion }}</small>{% endif %}</td>
+          <td>{{ e.usuario }}</td>
+          <td>{% if e.anulado %}<span class="badge b-err">ANULADO</span>{% else %}<span class="badge b-ok">ACTIVO</span>{% endif %}</td>
+          <td>
+            {% if not e.anulado %}
+            <details>
+              <summary>Editar</summary>
+              <form method="post" action="{{ url_for('entradas_editar', eid=e.id_entrada) }}" style="margin-top:6px; min-width:220px;" autocomplete="off">
+                <input type="hidden" name="obs_key" class="obs-key" value="">
+                <input type="date" name="fecha_recepcion" value="{{ e.fecha_recepcion }}" required style="margin-bottom:4px;">
+                <input type="number" name="cantidad_bolsas" value="{{ e.cantidad_bolsas }}" min="1" required style="margin-bottom:4px;">
+                <input type="text" class="obs-input" autocomplete="new-password" placeholder="" style="margin-bottom:4px;">
+                <input type="text" name="motivo" placeholder="Motivo obligatorio de edición" required style="margin-bottom:4px;">
+                <button class="btn btn-sm btn-warn" type="submit">Guardar cambio</button>
+              </form>
+            </details>
+            {% if rol_actual == 'MASTER' %}
+            <details style="margin-top:4px;">
+              <summary style="color:#b91c1c;">Anular (MASTER)</summary>
+              <form method="post" action="{{ url_for('entradas_anular', eid=e.id_entrada) }}" class="form-anular" style="margin-top:6px; min-width:210px;" autocomplete="off">
+                <input type="text" name="motivo" placeholder="Motivo de anulación" required style="margin-bottom:4px;">
+                {% if not es_soporte %}
+                <input type="password" name="pin_confirmacion" class="pin-9" inputmode="numeric" maxlength="9"
+                       autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"
+                       placeholder="Código de seguridad" required style="margin-bottom:4px;">
+                {% endif %}
+                <button class="btn btn-sm btn-danger" type="submit">Confirmar anulación</button>
+              </form>
+            </details>
+            {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="muted">Sin entradas registradas en este período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

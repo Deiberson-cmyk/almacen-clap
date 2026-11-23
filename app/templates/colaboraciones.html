@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Colaboración y Descarga · Almacén CLAP{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Registrar Salida por Colaboración y Descarga</h2>
+  <form method="post" action="{{ url_for('colaboraciones_crear') }}" id="formColab" autocomplete="off">
+    <input type="hidden" name="obs_key" class="obs-key" value="">
+    <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom:10px;">
+      <div class="field-compact">
+        <label>Fecha de Descarga</label>
+        <input type="date" name="fecha" value="{{ hoy }}" required>
+      </div>
+      <div class="field-compact">
+        <label>Cantidad de Bolsas</label>
+        <input type="number" name="cantidad_bolsas" id="cantColab" class="input-compact" min="1" value="2" required>
+      </div>
+      <div style="min-width:200px;">
+        <label>Receptor / Ayudante</label>
+        <input type="text" name="receptor" value="Ayudante de descarga" readonly>
+      </div>
+      <div style="flex:1; min-width:250px;">
+        <label>Camión / Lote Relacionado *</label>
+        <select name="id_entrada" id="selLoteColab" required>
+          <option value="">-- Seleccione camión o lote --</option>
+          {% for e in entradas %}
+            <option value="{{ e.id_entrada }}" data-disp="{{ e.disponible_lote }}">
+              {{ e.codigo }} ({{ e.fecha_recepcion|fecha_es }} · {{ e.cantidad_bolsas|int_es }} bolsas | Disp. lote: {{ e.disponible_lote|int_es }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Observaciones</label>
+        <input type="text" class="obs-input" autocomplete="new-password" placeholder="">
+      </div>
+    </div>
+    <button type="submit" class="btn">Registrar Colaboración</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Colaboraciones del Período Activo</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Fecha</th><th class="num">Bolsas</th><th>Lote Relacionado</th><th>Receptor</th><th>Observaciones</th><th>Usuario</th><th>Estado</th><th>Acciones</th></tr>
+      </thead>
+      <tbody>
+        {% for c in colaboraciones %}
+        <tr class="{{ 'anulado' if c.anulado }}">
+          <td>{{ c.fecha|fecha_es }}</td>
+          <td class="num"><strong>{{ c.cantidad_bolsas }}</strong></td>
+          <td>{{ c.codigo_entrada or '-' }}</td>
+          <td>{{ c.receptor or 'Ayudante de descarga' }}</td>
+          <td>{{ c.observaciones or '-' }}</td>
+          <td>{{ c.usuario }}</td>
+          <td>{% if c.anulado %}<span class="badge b-err">ANULADO</span>{% else %}<span class="badge b-ok">ACTIVO</span>{% endif %}</td>
+          <td>
+            {% if not c.anulado %}
+            <details>
+              <summary class="btn btn-sm btn-edit" style="list-style:none; display:inline-block;">Editar</summary>
+              <form method="post" action="{{ url_for('colaboraciones_editar', cid=c.id_colaboracion) }}" style="margin-top:6px;" autocomplete="off">
+                <input type="hidden" name="obs_key" class="obs-key" value="">
+                <input type="number" name="cantidad_bolsas" class="input-compact" value="{{ c.cantidad_bolsas }}" min="1" required style="margin-bottom:4px;">
+                <input type="text" value="Ayudante de descarga" readonly style="margin-bottom:4px;">
+                <input type="text" class="obs-input" autocomplete="new-password" placeholder="" style="margin-bottom:4px;">
+                <input type="text" name="motivo" placeholder="Motivo obligatorio" required style="margin-bottom:4px;">
+                <button class="btn btn-sm btn-edit" type="submit">Guardar</button>
+              </form>
+            </details>
+            {% if rol_actual == 'MASTER' %}
+            <details style="margin-top:4px;">
+              <summary style="color:#b91c1c;">Anular (MASTER)</summary>
+              <form method="post" action="{{ url_for('colaboraciones_anular', cid=c.id_colaboracion) }}" class="form-anular" style="margin-top:6px; min-width:210px;" autocomplete="off">
+                <input type="text" name="motivo" placeholder="Motivo de anulación" required style="margin-bottom:4px;">
+                {% if not es_soporte %}
+                <input type="password" name="pin_confirmacion" class="pin-9" inputmode="numeric" maxlength="9"
+                       autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"
+                       placeholder="Código de seguridad" required style="margin-bottom:4px;">
+                {% endif %}
+                <button class="btn btn-sm btn-danger" type="submit">Confirmar anulación</button>
+              </form>
+            </details>
+            {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="muted">Sin salidas por colaboración en este período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+document.getElementById('formColab').addEventListener('submit', (e) => {
+  const sel = document.getElementById('selLoteColab');
+  const cant = parseInt(document.getElementById('cantColab').value || '0', 10);
+  if (!sel.value) {
+    e.preventDefault();
+    alert('Debe seleccionar el camión o lote relacionado.');
+    sel.focus();
+    return;
+  }
+  const opt = sel.options[sel.selectedIndex];
+  const disp = parseInt(opt.getAttribute('data-disp') || '0', 10);
+  if (cant >= disp) {
+    e.preventDefault();
+    alert('La cantidad de bolsas por colaboración (' + cant + ') debe ser estrictamente menor a la cantidad disponible del lote seleccionado (' + disp + ').');
+    document.getElementById('cantColab').focus();
+  }
+});
+</script>
+{% endblock %}
